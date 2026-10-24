@@ -1,0 +1,44 @@
+# Interfaz de usuario
+
+streamlit>=1.35.0
+
+
+
+# SDK de IA / Agente multimodal
+
+google-generativeai>=0.7.0
+
+pydantic>=2.7.0
+
+
+
+# Cliente de inferencia para modelos de restauración (Real-ESRGAN, GFPGAN, DeOldify)
+
+replicate>=0.30.0
+
+
+
+# Manipulación de imágenes y utilidades
+
+Pillow>=10.3.0
+
+python-dotenv>=1.0.1
+
+requests>=2.32.0
+
+ollama>=0.3.0
+
+
+
+opencv-python
+
+opencv-python-headless
+
+google-genai
+
+torch 
+torchvision --index-url https://download.pytorch.org/whl/cu121
+basicsr 
+facexlib 
+gfpgan 
+realesrgan
