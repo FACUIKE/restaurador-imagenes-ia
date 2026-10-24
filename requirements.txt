@@ -1,47 +1,13 @@
-# Interfaz de usuario
-
 streamlit>=1.35.0
 
+streamlit-image-comparison>=0.0.4
 
 google-genai>=0.1.1
+
 opencv-python-headless>=4.8.0
+
 pillow>=10.0.0
+
 numpy>=1.24.0
+
 python-dotenv>=1.0.0
-
-# SDK de IA / Agente multimodal
-
-google-generativeai>=0.7.0
-
-pydantic>=2.7.0
-
-
-
-# Cliente de inferencia para modelos de restauración (Real-ESRGAN, GFPGAN, DeOldify)
-
-replicate>=0.30.0
-
-
-
-# Manipulación de imágenes y utilidades
-
-
-
-requests>=2.32.0
-
-ollama>=0.3.0
-
-
-
-opencv-python
-
-opencv-python-headless
-
-google-genai
-
-torch 
-torchvision 
-basicsr 
-facexlib 
-gfpgan 
-realesrgan
