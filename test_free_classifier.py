@@ -1,18 +1,16 @@
 import os
-import time
+from pathlib import Path
 from dotenv import load_dotenv
 from google import genai
 from PIL import Image
 
-# 1. Carga las variables definidas en el archivo .env
+# 1. Cargar API Key desde .env
 load_dotenv()
-
 API_KEY = os.getenv("GEMINI_API_KEY")
 
 if not API_KEY:
-    raise ValueError("No se encontró GEMINI_API_KEY en el archivo .env ni en el sistema.")
+    raise ValueError("No se encontró GEMINI_API_KEY. Verifica que tu archivo .env la contenga.")
 
-# Si GEMINI_API_KEY está en el entorno, genai.Client() la toma automáticamente
 client = genai.Client(api_key=API_KEY)
 
 def clasificar_imagen_gratis(ruta_imagen: str) -> str:
@@ -27,22 +25,30 @@ def clasificar_imagen_gratis(ruta_imagen: str) -> str:
     Responde ÚNICAMENTE con una sola palabra en minúsculas: 'rostro', 'texto' o 'paisaje'.
     """
     
-    # Modelo ultrarrápido y gratuito elegido
-    modelo = "gemini-3.5-flash-lite"
-    
-    try:
-        response = client.models.generate_content(
-            model=modelo,
-            contents=[img, prompt]
-        )
-        return response.text.strip().lower()
-    except Exception as e:
-        print(f"Error al clasificar con {modelo}: {e}")
-        raise e
+    response = client.models.generate_content(
+        model="gemini-3.8-flash",
+        contents=[img, prompt]
+    )
+    return response.text.strip().lower()
 
 if __name__ == "__main__":
-    print("Enviando imagen a la API gratuita de Google (Gemini 3.5 Flash Lite)...")
-    categoria = clasificar_imagen_gratis("storage/uploads/images2.jpeg")
+    uploads_dir = Path("storage/uploads")
+    uploads_dir.mkdir(parents=True, exist_ok=True)
+
+    # Buscar cualquier imagen existente
+    archivos = list(uploads_dir.glob("*.jpg")) + list(uploads_dir.glob("*.jpeg")) + list(uploads_dir.glob("*.png"))
+
+    if archivos:
+        imagen_prueba = archivos[0]
+        print(f"Usando imagen existente: {imagen_prueba.name}")
+    else:
+        # Si no hay ninguna, creamos una de prueba para no fallar
+        imagen_prueba = uploads_dir / "muestra_temporal.png"
+        Image.new("RGB", (200, 200), color=(80, 120, 200)).save(imagen_prueba)
+        print(f"Carpeta vacía. Se creó una muestra de prueba en: {imagen_prueba.name}")
+
+    print("Enviando imagen a la API de Gemini...")
+    categoria = clasificar_imagen_gratis(str(imagen_prueba))
     print(f"\n====================================")
-    print(f"Resultado de la API gratuita: {categoria}")
+    print(f"Resultado de la clasificación: {categoria}")
     print(f"====================================\n")
