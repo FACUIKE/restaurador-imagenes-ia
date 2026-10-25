@@ -76,3 +76,9 @@ Define en `.env`:
 ```bash
 streamlit run frontend/app.py
 ```
+
+tesis-experimentos/
+│
+├── Punto 1: Enrutador Semántico (VLM vs CNN Preentrenada)  
+├── Punto 2: Benchmark y Correlación de Métricas (PSNR, SSIM, LPIPS, NIQE)
+└── Punto 3: Detección y Cuantificación de Alucinaciones
