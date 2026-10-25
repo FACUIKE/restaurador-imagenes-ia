@@ -1,0 +1,1 @@
+"""Módulo Backend - API de Restauración y Auditoría de Imágenes."""
