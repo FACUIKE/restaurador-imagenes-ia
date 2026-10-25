@@ -1,446 +1,579 @@
 import os
+import io
 import time
 from pathlib import Path
-from io import BytesIO
-
+from dotenv import load_dotenv
 import cv2
 import numpy as np
-from PIL import Image
-from dotenv import load_dotenv
+from PIL import Image, ImageOps
+
 import streamlit as st
 from streamlit_image_comparison import image_comparison
 from google import genai
 
-# Cargar variables de entorno locales (.env)
 load_dotenv()
 
-# Configuración de página panorámica
+# ==========================================
+# Configuración General y Estilos Dark Glass
+# ==========================================
 st.set_page_config(
-    page_title="Aura AI Studio | Neural Restoration & Audit",
-    page_icon="⚡",
+    page_title="VisionRestore AI - Auditoría & Super-Resolución",
+    page_icon="🔬",
     layout="wide",
-    initial_sidebar_state="collapsed"
+    initial_sidebar_state="collapsed",
 )
 
-# Estilos visuales Dark Glassmorphism
 st.markdown("""
 <style>
-    @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap');
-
-    html, body, [class*="css"] {
-        font-family: 'Plus Jakarta Sans', sans-serif;
+    .stApp {
+        background-color: #0b0f19;
+        color: #e2e8f0;
     }
     
-    .stApp {
-        background: radial-gradient(circle at 50% 0%, #0d1527 0%, #05070d 100%);
-        color: #f1f5f9;
-    }
-
-    .saas-navbar {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        background: rgba(15, 23, 42, 0.7);
-        backdrop-filter: blur(20px);
-        border: 1px solid rgba(255, 255, 255, 0.08);
-        border-radius: 14px;
-        padding: 12px 24px;
-        margin-bottom: 20px;
-    }
-
-    .telemetry-card {
-        background: rgba(15, 23, 42, 0.6);
-        backdrop-filter: blur(14px);
-        border: 1px solid rgba(255, 255, 255, 0.06);
+    /* Tarjetas de telemetría superior */
+    .metric-card {
+        background: #111827;
+        border: 1px solid #1f2937;
         border-radius: 12px;
         padding: 14px 18px;
+        margin-bottom: 12px;
+        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.4);
+    }
+    .metric-label {
+        font-size: 0.70rem;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+        color: #94a3b8;
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        margin-bottom: 4px;
+    }
+    .metric-value {
+        font-size: 1.45rem;
+        font-weight: 800;
+        letter-spacing: -0.02em;
+        line-height: 1.2;
+    }
+    .metric-sub {
+        font-size: 0.70rem;
+        color: #64748b;
+        margin-top: 4px;
+    }
+    
+    /* Tarjetas laterales de la columna izquierda */
+    .side-metric-card {
+        background: #111827;
+        border: 1px solid #1f2937;
+        border-radius: 10px;
+        padding: 12px 16px;
+        margin-top: 8px;
         display: flex;
         flex-direction: column;
-        justify-content: space-between;
-        transition: transform 0.2s ease;
+        justify-content: center;
+        transition: border-color 0.2s ease;
     }
-    .telemetry-card:hover {
-        transform: translateY(-2px);
+    .side-metric-card:hover {
+        border-color: #374151;
     }
-    .telemetry-label {
-        font-size: 0.72rem;
-        font-weight: 600;
+    .side-metric-title {
+        font-size: 0.70rem;
         text-transform: uppercase;
-        color: #64748b;
-    }
-    .telemetry-value {
-        font-size: 1.35rem;
         font-weight: 700;
+        color: #94a3b8;
+        letter-spacing: 0.05em;
+    }
+    .side-metric-num {
+        font-size: 1.35rem;
+        font-weight: 800;
+        margin-top: 2px;
+    }
+    
+    /* Botón rojo de acción */
+    .stButton > button {
+        width: 100%;
+        background-color: #ef4444;
+        color: #ffffff;
+        font-weight: 700;
+        font-size: 0.95rem;
+        padding: 12px 20px;
+        border-radius: 10px;
+        border: none;
+        transition: all 0.2s ease;
+    }
+    .stButton > button:hover {
+        background-color: #dc2626;
+        color: #ffffff;
+        box-shadow: 0 0 15px rgba(239, 68, 68, 0.4);
+    }
+    
+    /* Botón de descarga */
+    .stDownloadButton > button {
+        width: 100%;
+        background-color: #1f2937;
         color: #f8fafc;
-        margin-top: 4px;
-        font-family: 'JetBrains Mono', monospace;
-    }
-
-    .cockpit-panel {
-        background: rgba(15, 23, 42, 0.55);
-        backdrop-filter: blur(18px);
-        border: 1px solid rgba(255, 255, 255, 0.08);
-        border-radius: 16px;
-        padding: 20px;
-        box-shadow: 0 16px 40px -15px rgba(0, 0, 0, 0.6);
-    }
-
-    .badge-chip {
-        display: inline-flex;
-        align-items: center;
-        padding: 3px 10px;
-        border-radius: 9999px;
-        font-size: 0.72rem;
+        border: 1px solid #374151;
         font-weight: 600;
+        padding: 10px 16px;
+        border-radius: 10px;
     }
-    .badge-cyan { background: rgba(6, 182, 212, 0.12); color: #22d3ee; border: 1px solid rgba(6, 182, 212, 0.3); }
-    .badge-green { background: rgba(16, 185, 129, 0.12); color: #34d399; border: 1px solid rgba(16, 185, 129, 0.3); }
-    .badge-amber { background: rgba(245, 158, 11, 0.12); color: #fbbf24; border: 1px solid rgba(245, 158, 11, 0.3); }
-
-    .block-container {
-        padding-top: 1.5rem !important;
-        padding-bottom: 2rem !important;
-        max-width: 98% !important;
+    .stDownloadButton > button:hover {
+        background-color: #374151;
+        border-color: #4b5563;
+        color: #ffffff;
     }
 
-    /* Pestañas estilizadas */
-    button[data-baseweb="tab"] {
-        font-size: 0.9rem !important;
-        font-weight: 600 !important;
+    .viewer-header {
+        font-size: 0.82rem;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        color: #94a3b8;
+        margin-bottom: 10px;
+        display: flex;
+        align-items: center;
+        gap: 6px;
     }
 </style>
 """, unsafe_allow_html=True)
 
-# Obtener clave API (soporta .env local o secrets de Streamlit Cloud)
-API_KEY = os.getenv("GEMINI_API_KEY")
-if not API_KEY and "GEMINI_API_KEY" in st.secrets:
-    API_KEY = st.secrets["GEMINI_API_KEY"]
-
-# Inicializar Estado de Sesión
-if "analyzed" not in st.session_state:
-    st.session_state.analyzed = False
-if "categoria" not in st.session_state:
-    st.session_state.categoria = "EN ESPERA"
-if "engine_used" not in st.session_state:
-    st.session_state.engine_used = "Gemini Flash Vision"
-if "latency" not in st.session_state:
-    st.session_state.latency = 0.0
-if "orig_dims" not in st.session_state:
-    st.session_state.orig_dims = (0, 0)
-if "out_dims" not in st.session_state:
-    st.session_state.out_dims = (0, 0)
-if "img_input" not in st.session_state:
-    st.session_state.img_input = None
-if "img_output" not in st.session_state:
-    st.session_state.img_output = None
-if "img_heatmap" not in st.session_state:
-    st.session_state.img_heatmap = None
-if "fidelity_score" not in st.session_state:
-    st.session_state.fidelity_score = 0.0
-if "hallucination_ratio" not in st.session_state:
-    st.session_state.hallucination_ratio = 0.0
-if "ssim_score" not in st.session_state:
-    st.session_state.ssim_score = 0.0
-
-# Barra superior
-st.markdown("""
-<div class="saas-navbar">
-    <div style="display:flex; align-items:center; gap:12px;">
-        <div style="width:34px; height:34px; border-radius:8px; background:linear-gradient(135deg, #06b6d4, #6366f1); display:flex; align-items:center; justify-content:center; font-size:1.1rem;">⚡</div>
-        <div>
-            <span style="font-weight:800; font-size:1.15rem; color:#ffffff;">AURA RESTORE <span style="font-size:0.75rem; color:#06b6d4; font-weight:600; padding:2px 6px; border:1px solid rgba(6,182,212,0.3); border-radius:6px; margin-left:6px;">RESEARCH EDITION</span></span>
-            <div style="font-size:0.75rem; color:#64748b;">Enrutador Semántico + Restauración Adaptativa + Auditoría de Alucinaciones</div>
-        </div>
-    </div>
-    <div style="display:flex; gap:10px; align-items:center;">
-        <span class="badge-chip badge-cyan">Serverless Cloud</span>
-        <span class="badge-chip badge-amber">Hallucination Audit</span>
-        <span class="badge-chip badge-green">Pipeline Online</span>
-    </div>
-</div>
-""", unsafe_allow_html=True)
-
-# 4 Métricas de Telemetría Dinámicas
-c1, c2, c3, c4 = st.columns(4)
-
-with c1:
-    st.markdown(f"""
-    <div class="telemetry-card">
-        <div class="telemetry-label">🏷️ Clasificación Visual</div>
-        <div class="telemetry-value" style="color: #38bdf8;">{st.session_state.categoria.upper()}</div>
-        <span style="font-size:0.7rem; color:#64748b;">{st.session_state.engine_used}</span>
-    </div>
-    """, unsafe_allow_html=True)
-
-with c2:
-    st.markdown(f"""
-    <div class="telemetry-card">
-        <div class="telemetry-label">⏱️ Tiempo de Inferencia</div>
-        <div class="telemetry-value" style="color: #34d399;">{st.session_state.latency:.2f}s</div>
-        <span style="font-size:0.7rem; color:#64748b;">Latencia de ejecución</span>
-    </div>
-    """, unsafe_allow_html=True)
-
-with c3:
-    fid_val = f"{st.session_state.fidelity_score:.3f}" if st.session_state.analyzed else "--"
-    fid_color = "#34d399" if st.session_state.fidelity_score >= 0.70 else "#f59e0b"
-    st.markdown(f"""
-    <div class="telemetry-card">
-        <div class="telemetry-label">🛡️ Fidelity Score</div>
-        <div class="telemetry-value" style="color: {fid_color};">{fid_val}</div>
-        <span style="font-size:0.7rem; color:#64748b;">Confiabilidad estructural [0-1]</span>
-    </div>
-    """, unsafe_allow_html=True)
-
-with c4:
-    hal_val = f"{st.session_state.hallucination_ratio:.1f}%" if st.session_state.analyzed else "--"
-    st.markdown(f"""
-    <div class="telemetry-card">
-        <div class="telemetry-label">🔬 Tasa de Alucinación</div>
-        <div class="telemetry-value" style="color: #fbbf24;">{hal_val}</div>
-        <span style="font-size:0.7rem; color:#64748b;">Discrepancia de alta frecuencia</span>
-    </div>
-    """, unsafe_allow_html=True)
-
-st.write("")
-
-# Función de Clasificación con Cascada de Modelos y Reintentos
-def clasificar_con_gemini(pil_image: Image.Image, api_key: str):
+# ==========================================
+# Inicialización del Cliente Gemini
+# ==========================================
+api_key = os.getenv("GEMINI_API_KEY")
+client = None
+if api_key:
     client = genai.Client(api_key=api_key)
-    prompt = """
-    Analiza esta imagen y clasifícala estrictamente en una de estas 3 opciones:
-    - rostro
-    - texto
-    - paisaje
+
+# ==========================================
+# Funciones de Visión, Restauración y Auditoría
+# ==========================================
+def clasificar_con_gemini(pil_image: Image.Image) -> tuple[str, float]:
+    """Clasifica la imagen en: rostro, texto o paisaje."""
+    if not client:
+        return "paisaje", 0.0
     
-    Responde ÚNICAMENTE con una sola palabra en minúsculas: 'rostro', 'texto' o 'paisaje'.
-    """
+    t0 = time.perf_counter()
+    prompt = "Clasifica estrictamente en: 'rostro', 'texto' o 'paisaje'. Responde solo con una de esas tres palabras en minúsculas."
+    modelos = ["gemini-3.5-flash-lite", "gemini-3.8-flash"]
     
-    modelos_candidatos = [
-        "gemini-3.5-flash-lite",
-        "gemini-3.8-flash",
-        "gemini-2.5-flash",
-        "gemini-2.5-flash-lite"
-    ]
+    cat = "paisaje"
+    for m in modelos:
+        try:
+            res = client.models.generate_content(model=m, contents=[pil_image, prompt])
+            cat_limpia = res.text.strip().lower()
+            if any(k in cat_limpia for k in ["rostro", "texto", "paisaje"]):
+                for k in ["rostro", "texto", "paisaje"]:
+                    if k in cat_limpia:
+                        cat = k
+                        break
+                break
+        except Exception:
+            continue
+            
+    latencia = time.perf_counter() - t0
+    return cat, latencia
 
-    for model_name in modelos_candidatos:
-        for _ in range(2):
-            try:
-                response = client.models.generate_content(
-                    model=model_name,
-                    contents=[pil_image, prompt]
-                )
-                if response and response.text:
-                    cat = response.text.strip().lower()
-                    for valida in ["rostro", "texto", "paisaje"]:
-                        if valida in cat:
-                            return valida, f"Gemini ({model_name})"
-            except Exception:
-                time.sleep(0.8)
-                continue
 
-    return "paisaje", "Heurístico Local (Fallback)"
-
-def restaurar_imagen(pil_img: Image.Image, categoria: str) -> Image.Image:
-    img_cv = cv2.cvtColor(np.array(pil_img), cv2.COLOR_RGB2BGR)
-    h, w = img_cv.shape[:2]
+def restaurar_imagen_adaptativa(img_np: np.ndarray, categoria: str) -> np.ndarray:
+    """Super-resolución 2x con Anti-Aliasing de contornos y separación de frecuencias."""
+    h, w = img_np.shape[:2]
+    nueva_w, nueva_h = int(w * 2), int(h * 2)
 
     if categoria == "texto":
-        denoised = cv2.bilateralFilter(img_cv, d=9, sigmaColor=75, sigmaSpace=75)
-        upscaled = cv2.resize(denoised, (w * 2, h * 2), interpolation=cv2.INTER_CUBIC)
-        gaussian = cv2.GaussianBlur(upscaled, (0, 0), 2.0)
-        resultado = cv2.addWeighted(upscaled, 1.5, gaussian, -0.5, 0)
+        escalada = cv2.resize(img_np, (nueva_w, nueva_h), interpolation=cv2.INTER_CUBIC)
+        denoised = cv2.bilateralFilter(escalada, d=9, sigmaColor=75, sigmaSpace=75)
+        gaussian = cv2.GaussianBlur(denoised, (0, 0), 2.0)
+        resultado = cv2.addWeighted(denoised, 1.5, gaussian, -0.5, 0)
+        return resultado
+
     elif categoria == "rostro":
-        denoised = cv2.fastNlMeansDenoisingColored(img_cv, None, 6, 6, 7, 21)
-        upscaled = cv2.resize(denoised, (w * 2, h * 2), interpolation=cv2.INTER_LANCZOS4)
-        kernel = np.array([[0, -0.5, 0], [-0.5, 3.0, -0.5], [0, -0.5, 0]])
-        resultado = cv2.filter2D(upscaled, -1, kernel)
+        # 1. DE-BLOCKING PRE-ESCALADO (En resolución nativa)
+        # Disuelve los bloques cuadrados del JPEG antes de agrandarlos
+        pre_limpia = cv2.bilateralFilter(img_np, d=5, sigmaColor=16, sigmaSpace=16)
+
+        # 2. Escalado 2x con INTER_CUBIC (evita el pixelado de rebote/ringing de Lanczos en bordes)
+        escalada = cv2.resize(pre_limpia, (nueva_w, nueva_h), interpolation=cv2.INTER_CUBIC)
+
+        # 3. Conversión al espacio perceptual CIE LAB
+        lab = cv2.cvtColor(escalada, cv2.COLOR_RGB2LAB)
+        l, a, b = cv2.split(lab)
+
+        # 4. Limpieza profunda de ruido cromático (elimina manchas violetas/azules en bordes nocturnos)
+        a_clean = cv2.GaussianBlur(a, (7, 7), 2.0)
+        b_clean = cv2.GaussianBlur(b, (7, 7), 2.0)
+
+        # 5. Base de luminancia suavizada preservando bordes
+        l_base = cv2.bilateralFilter(l, d=7, sigmaColor=18, sigmaSpace=18).astype(np.float32)
+
+        # 6. DETECCIÓN DE CONTORNOS EXTERIORES PARA ANTI-ALIASING
+        # Calculamos la fuerza del borde con operadores de Scharr/Sobel
+        gx = cv2.Sobel(l_base, cv2.CV_32F, 1, 0, ksize=3)
+        gy = cv2.Sobel(l_base, cv2.CV_32F, 0, 1, ksize=3)
+        grad_mag = cv2.magnitude(gx, gy)
+
+        # Máscara de contorno fuerte (bordes de alto contraste como perfil de cara contra fondo)
+        # Donde grad_mag > 30, empieza a proteger el borde para no pixelarlo
+        mascara_contorno = np.clip((grad_mag - 28.0) / 38.0, 0.0, 1.0)
+        mascara_contorno = cv2.GaussianBlur(mascara_contorno, (5, 5), 1.2)
+
+        # Suavizado sub-píxel exclusivo para alisar el efecto escalera en los contornos
+        l_antialiasing = cv2.GaussianBlur(l_base, (3, 3), 0.85)
+        l_base_suave = l_base * (1.0 - mascara_contorno) + l_antialiasing * mascara_contorno
+
+        # 7. Descomposición Multiescala de Facciones Internas
+        g_fina = cv2.GaussianBlur(l_base_suave, (0, 0), sigmaX=1.1)
+        g_media = cv2.GaussianBlur(l_base_suave, (0, 0), sigmaX=2.6)
+
+        detalle_fino = l_base_suave - g_fina
+        detalle_medio = g_fina - g_media
+
+        # Soft-Coring para no levantar ruido en zonas lisas de la piel
+        detalle_fino_cored = np.sign(detalle_fino) * np.maximum(0.0, np.abs(detalle_fino) - 1.2)
+        detalle_medio_cored = np.sign(detalle_medio) * np.maximum(0.0, np.abs(detalle_medio) - 1.6)
+
+        # Atenuamos el enfoque sobre el contorno exterior (1.0 - mascara_contorno)
+        # Así enfocamos ojos, cejas y pelo, pero NO aserramos el borde de la cara
+        factor_proteccion = 1.0 - (0.75 * mascara_contorno)
+        detalle_total = (detalle_fino_cored * 1.55 + detalle_medio_cored * 1.25) * factor_proteccion
+        detalle_total = np.clip(detalle_total, -14.0, 14.0)
+
+        l_estructurada = np.clip(l_base_suave + detalle_total, 0.0, 255.0)
+
+        # 8. Curva Tonal S-Sinusoidal suave para dar volumen a las sombras
+        l_norm = l_estructurada / 255.0
+        alpha_contraste = 0.12
+        l_curva = l_norm - alpha_contraste * (np.sin(2.0 * np.pi * l_norm) / (2.0 * np.pi))
+        l_final = np.clip(l_curva * 255.0, 0, 255).astype(np.uint8)
+
+        # 9. Recomposición final
+        lab_final = cv2.merge((l_final, a_clean, b_clean))
+        resultado = cv2.cvtColor(lab_final, cv2.COLOR_LAB2RGB)
+        return resultado
+
     else:  # paisaje / general
-        upscaled = cv2.resize(img_cv, (w * 2, h * 2), interpolation=cv2.INTER_LANCZOS4)
-        lab = cv2.cvtColor(upscaled, cv2.COLOR_BGR2LAB)
+        escalada = cv2.resize(img_np, (nueva_w, nueva_h), interpolation=cv2.INTER_LANCZOS4)
+        lab = cv2.cvtColor(escalada, cv2.COLOR_RGB2LAB)
         l, a, b = cv2.split(lab)
         clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))
-        cl = clahe.apply(l)
-        resultado = cv2.cvtColor(cv2.merge((cl, a, b)), cv2.COLOR_LAB2BGR)
+        l_clahe = clahe.apply(l)
+        lab_merge = cv2.merge((l_clahe, a, b))
+        resultado = cv2.cvtColor(lab_merge, cv2.COLOR_LAB2RGB)
+        return resultado
 
-    return Image.fromarray(cv2.cvtColor(resultado, cv2.COLOR_BGR2RGB))
 
-def auditar_alucinaciones(pil_orig: Image.Image, pil_rest: Image.Image):
-    """
-    Computa los gradientes espaciales de Sobel, genera el mapa de calor de incertidumbre
-    y extrae el Fidelity Score y Hallucination Ratio en memoria.
-    """
-    arr_orig = np.array(pil_orig.convert("L"))
-    arr_rest = np.array(pil_rest.convert("L"))
+def calcular_nitidez_laplaciana(img_gray: np.ndarray) -> float:
+    """Calcula la varianza del Laplaciano como proxy de nitidez."""
+    return float(cv2.Laplacian(img_gray, cv2.CV_64F).var())
 
-    h, w = arr_rest.shape[:2]
-    # Reescalar imagen original al tamaño final para comparar mapas espaciales
-    arr_orig_scaled = cv2.resize(arr_orig, (w, h), interpolation=cv2.INTER_CUBIC)
 
-    # 1. Gradientes de Sobel
-    sobel_orig_x = cv2.Sobel(arr_orig_scaled, cv2.CV_64F, 1, 0, ksize=3)
-    sobel_orig_y = cv2.Sobel(arr_orig_scaled, cv2.CV_64F, 0, 1, ksize=3)
-    grad_orig = np.sqrt(sobel_orig_x**2 + sobel_orig_y**2)
+def calcular_ssim_simple(img1_gray: np.ndarray, img2_gray: np.ndarray) -> float:
+    """Cálculo de SSIM global determinista."""
+    c1 = (0.01 * 255) ** 2
+    c2 = (0.03 * 255) ** 2
+    
+    img1 = img1_gray.astype(np.float64)
+    img2 = img2_gray.astype(np.float64)
+    
+    mu1 = cv2.GaussianBlur(img1, (11, 11), 1.5)
+    mu2 = cv2.GaussianBlur(img2, (11, 11), 1.5)
+    
+    mu1_sq = mu1 ** 2
+    mu2_sq = mu2 ** 2
+    mu1_mu2 = mu1 * mu2
+    
+    sigma1_sq = cv2.GaussianBlur(img1 ** 2, (11, 11), 1.5) - mu1_sq
+    sigma2_sq = cv2.GaussianBlur(img2 ** 2, (11, 11), 1.5) - mu2_sq
+    sigma12 = cv2.GaussianBlur(img1 * img2, (11, 11), 1.5) - mu1_mu2
+    
+    ssim_map = ((2 * mu1_mu2 + c1) * (2 * sigma12 + c2)) / ((mu1_sq + mu2_sq + c1) * (sigma1_sq + sigma2_sq + c2))
+    return float(np.mean(ssim_map))
 
-    sobel_rest_x = cv2.Sobel(arr_rest, cv2.CV_64F, 1, 0, ksize=3)
-    sobel_rest_y = cv2.Sobel(arr_rest, cv2.CV_64F, 0, 1, ksize=3)
-    grad_rest = np.sqrt(sobel_rest_x**2 + sobel_rest_y**2)
 
-    # 2. Residuo diferencial
-    diff = np.abs(grad_rest - grad_orig)
-
-    # 3. Identificación de píxeles anómalos (percentil 90)
+def auditar_alucinaciones(img_orig_rgb: np.ndarray, img_rest_rgb: np.ndarray) -> tuple[np.ndarray, dict]:
+    """Auditoría de residuos de gradiente y métricas forenses."""
+    h_rest, w_rest = img_rest_rgb.shape[:2]
+    
+    deg_gray = cv2.cvtColor(img_orig_rgb, cv2.COLOR_RGB2GRAY)
+    res_gray = cv2.cvtColor(img_rest_rgb, cv2.COLOR_RGB2GRAY)
+    
+    deg_scaled = cv2.resize(deg_gray, (w_rest, h_rest), interpolation=cv2.INTER_CUBIC)
+    
+    grad_deg_x = cv2.Sobel(deg_scaled, cv2.CV_64F, 1, 0, ksize=3)
+    grad_deg_y = cv2.Sobel(deg_scaled, cv2.CV_64F, 0, 1, ksize=3)
+    grad_deg = np.sqrt(grad_deg_x**2 + grad_deg_y**2)
+    
+    grad_res_x = cv2.Sobel(res_gray, cv2.CV_64F, 1, 0, ksize=3)
+    grad_res_y = cv2.Sobel(res_gray, cv2.CV_64F, 0, 1, ksize=3)
+    grad_res = np.sqrt(grad_res_x**2 + grad_res_y**2)
+    
+    diff = np.abs(grad_res - grad_deg)
+    
     umbral = np.percentile(diff, 90)
     anomalias = np.where(diff > umbral, diff, 0)
-
-    # 4. Mapa de Calor (JET Colormap) superpuesto
+    
     anomalias_norm = cv2.normalize(anomalias, None, 0, 255, cv2.NORM_MINMAX).astype(np.uint8)
-    heatmap_bgr = cv2.applyColorMap(anomalias_norm, cv2.COLORMAP_JET)
-    heatmap_rgb = cv2.cvtColor(heatmap_bgr, cv2.COLOR_BGR2RGB)
-
-    rest_rgb = np.array(pil_rest)
-    overlay = cv2.addWeighted(rest_rgb, 0.65, heatmap_rgb, 0.35, 0)
-    pil_heatmap = Image.fromarray(overlay)
-
-    # 5. Métricas numéricas
+    heatmap_jet = cv2.applyColorMap(anomalias_norm, cv2.COLORMAP_JET)
+    heatmap_rgb = cv2.cvtColor(heatmap_jet, cv2.COLOR_BGR2RGB)
+    
+    overlay = cv2.addWeighted(img_rest_rgb, 0.65, heatmap_rgb, 0.35, 0)
+    
     error_medio = np.mean(diff) / 255.0
     fidelity_score = max(0.0, min(1.0, 1.0 - (error_medio * 2.0)))
     hallucination_ratio = (np.count_nonzero(anomalias) / anomalias.size) * 100.0
+    ssim_val = calcular_ssim_simple(deg_scaled, res_gray)
+    
+    # Delta de nitidez
+    nitidez_orig = calcular_nitidez_laplaciana(deg_gray)
+    nitidez_rest = calcular_nitidez_laplaciana(res_gray)
+    delta_nitidez = ((nitidez_rest - nitidez_orig) / max(nitidez_orig, 1.0)) * 100.0
+    
+    metricas = {
+        "fidelity_score": fidelity_score,
+        "hallucination_ratio": hallucination_ratio,
+        "ssim": ssim_val,
+        "delta_nitidez": delta_nitidez,
+        "out_res": f"{w_rest} x {h_rest} px"
+    }
+    
+    return overlay, metricas
 
-    # Similitud estructural simplificada (SSIM proxy sobre luminancia)
-    c1_c = (0.01 * 255)**2
-    c2_c = (0.03 * 255)**2
-    mu1 = np.mean(arr_orig_scaled)
-    mu2 = np.mean(arr_rest)
-    sigma1_sq = np.var(arr_orig_scaled)
-    sigma2_sq = np.var(arr_rest)
-    sigma12 = np.mean((arr_orig_scaled - mu1) * (arr_rest - mu2))
-    ssim_val = ((2 * mu1 * mu2 + c1_c) * (2 * sigma12 + c2_c)) / ((mu1**2 + mu2**2 + c1_c) * (sigma1_sq + sigma2_sq + c2_c))
 
-    return pil_heatmap, round(fidelity_score, 4), round(hallucination_ratio, 2), round(float(ssim_val), 4)
+# ==========================================
+# Inicialización de Estado de Sesión
+# ==========================================
+if "categoria" not in st.session_state:
+    st.session_state.categoria = "PENDIENTE"
+if "latencia" not in st.session_state:
+    st.session_state.latencia = 0.0
+if "fidelity" not in st.session_state:
+    st.session_state.fidelity = 0.0
+if "hallucination_rate" not in st.session_state:
+    st.session_state.hallucination_rate = 0.0
+if "ssim_score" not in st.session_state:
+    st.session_state.ssim_score = 0.0
+if "delta_nitidez" not in st.session_state:
+    st.session_state.delta_nitidez = 0.0
+if "out_res" not in st.session_state:
+    st.session_state.out_res = "0 x 0 px"
+if "img_restaurada" not in st.session_state:
+    st.session_state.img_restaurada = None
+if "img_heatmap" not in st.session_state:
+    st.session_state.img_heatmap = None
+if "img_original" not in st.session_state:
+    st.session_state.img_original = None
 
-# Layout de dos columnas
-col_left, col_right = st.columns([1, 2.3], gap="medium")
+# ==========================================
+# Telemetría Superior (Fila de 4 Métricas Globales)
+# ==========================================
+col_m1, col_m2, col_m3, col_m4 = st.columns(4)
 
-with col_left:
-    st.markdown('<div class="cockpit-panel">', unsafe_allow_html=True)
-    st.markdown("<h4 style='margin-top:0; color:#f8fafc; font-size:1rem; font-weight:700;'>🕹️ Ingesta y Control</h4>", unsafe_allow_html=True)
+with col_m1:
+    st.markdown(f"""
+    <div class="metric-card">
+        <div class="metric-label">🏷️ Clasificación Visual</div>
+        <div class="metric-value" style="color: #60a5fa;">{st.session_state.categoria.upper()}</div>
+        <div class="metric-sub">Enrutador semántico multimodal</div>
+    </div>
+    """, unsafe_allow_html=True)
 
-    if not API_KEY:
-        st.warning("⚠️ Configura GEMINI_API_KEY en tu archivo `.env` o en Secrets de Streamlit.")
+with col_m2:
+    st.markdown(f"""
+    <div class="metric-card">
+        <div class="metric-label">⏱️ Tiempo de Inferencia</div>
+        <div class="metric-value" style="color: #34d399;">{st.session_state.latencia:.2f}s</div>
+        <div class="metric-sub">Latencia total de pipeline</div>
+    </div>
+    """, unsafe_allow_html=True)
 
-    uploaded = st.file_uploader("Seleccionar imagen a restaurar", type=["jpg", "jpeg", "png", "webp"])
+with col_m3:
+    color_fid = "#38bdf8" if st.session_state.fidelity >= 0.7 else "#fbbf24"
+    st.markdown(f"""
+    <div class="metric-card">
+        <div class="metric-label">🛡️ Fidelity Score</div>
+        <div class="metric-value" style="color: {color_fid};">{st.session_state.fidelity:.3f}</div>
+        <div class="metric-sub">Confiabilidad estructural [0-1]</div>
+    </div>
+    """, unsafe_allow_html=True)
 
-    if uploaded is not None:
-        pil_in = Image.open(uploaded)
-        st.session_state.img_input = pil_in
-        st.session_state.orig_dims = (pil_in.width, pil_in.height)
+with col_m4:
+    st.markdown(f"""
+    <div class="metric-card">
+        <div class="metric-label">⚠️ Tasa de Alucinación</div>
+        <div class="metric-value" style="color: #fbbf24;">{st.session_state.hallucination_rate:.1f}%</div>
+        <div class="metric-sub">Discrepancia de alta frecuencia</div>
+    </div>
+    """, unsafe_allow_html=True)
+
+# ==========================================
+# Cuerpo Principal: Columna Izquierda + Visores Paralelos
+# ==========================================
+col_izq, col_centro, col_der = st.columns([1.0, 1.35, 1.35], gap="small")
+
+# --- COLUMNA 1: INGESTA, CONTROL Y CARACTERÍSTICAS DEL PROCESAMIENTO ---
+with col_izq:
+    st.markdown("""
+    <div style="font-size: 0.95rem; font-weight: 700; color: #f8fafc; margin-bottom: 10px;">
+        🕹️ Ingesta y Control
+    </div>
+    """, unsafe_allow_html=True)
+
+    archivo_subido = st.file_uploader(
+        "Seleccionar imagen a restaurar",
+        type=["png", "jpg", "jpeg", "webp"],
+        label_visibility="collapsed"
+    )
+
+    if archivo_subido is not None:
+        pil_raw = Image.open(archivo_subido)
+        # Corrección automática de rotación EXIF de móviles
+        pil_raw = ImageOps.exif_transpose(pil_raw).convert("RGB")
+        w_orig, h_orig = pil_raw.size
 
         st.markdown(f"""
-        <div style="margin: 10px 0; padding: 10px; background: rgba(0,0,0,0.3); border-radius: 8px; border: 1px solid rgba(255,255,255,0.05); font-size: 0.8rem; color:#94a3b8;">
-            📁 <b>Archivo:</b> {uploaded.name}<br>
-            📏 <b>Resolución Original:</b> {pil_in.width} x {pil_in.height} px
+        <div style="background: #111827; border: 1px solid #1f2937; border-radius: 8px; padding: 10px 14px; margin: 10px 0; font-size: 0.8rem; color: #94a3b8;">
+            📄 <b>Archivo:</b> {archivo_subido.name}<br>
+            📐 <b>Resolución Original:</b> {w_orig} x {h_orig} px
         </div>
         """, unsafe_allow_html=True)
 
-        if st.button("⚡ Ejecutar Restauración + Auditoría", type="primary", use_container_width=True, disabled=not API_KEY):
-            t0 = time.time()
-            
-            with st.spinner("1. Clasificando semántica con Gemini Vision API..."):
-                cat, engine_name = clasificar_con_gemini(pil_in, API_KEY)
+        if st.button("⚡ Ejecutar Restauración + Auditoría"):
+            with st.spinner("Procesando en memoria RAM..."):
+                img_np = np.array(pil_raw)
+
+                cat, lat = clasificar_con_gemini(pil_raw)
+                rest_np = restaurar_imagen_adaptativa(img_np, cat)
+                heatmap_np, metricas = auditar_alucinaciones(img_np, rest_np)
+
+                st.session_state.img_original = pil_raw
+                st.session_state.img_restaurada = Image.fromarray(rest_np)
+                st.session_state.img_heatmap = Image.fromarray(heatmap_np)
                 st.session_state.categoria = cat
-                st.session_state.engine_used = engine_name
+                st.session_state.latencia = lat
+                st.session_state.fidelity = metricas["fidelity_score"]
+                st.session_state.hallucination_rate = metricas["hallucination_ratio"]
+                st.session_state.ssim_score = metricas["ssim"]
+                st.session_state.delta_nitidez = metricas["delta_nitidez"]
+                st.session_state.out_res = metricas["out_res"]
 
-            with st.spinner(f"2. Restauración adaptativa 2x [{cat.upper()}]..."):
-                pil_out = restaurar_imagen(pil_in, cat)
-                st.session_state.img_output = pil_out
-                st.session_state.out_dims = (pil_out.width, pil_out.height)
+                st.rerun()
 
-            with st.spinner("3. Auditando alucinaciones y gradientes de Sobolev..."):
-                heatmap, fid, hal, ssim_v = auditar_alucinaciones(pil_in, pil_out)
-                st.session_state.img_heatmap = heatmap
-                st.session_state.fidelity_score = fid
-                st.session_state.hallucination_ratio = hal
-                st.session_state.ssim_score = ssim_v
-
-            st.session_state.latency = time.time() - t0
-            st.session_state.analyzed = True
-            st.rerun()
-    else:
-        st.markdown("""
-        <div style="border: 2px dashed rgba(255,255,255,0.08); border-radius: 10px; padding: 30px 15px; text-align: center; color: #64748b; font-size: 0.85rem;">
-            Arrastra una fotografía aquí para comenzar
-        </div>
-        """, unsafe_allow_html=True)
-
-    st.markdown('</div>', unsafe_allow_html=True)
-
-with col_right:
-    st.markdown('<div class="cockpit-panel">', unsafe_allow_html=True)
-    
-    if st.session_state.analyzed and st.session_state.img_input and st.session_state.img_output:
-        tab_restore, tab_forensic = st.tabs([
-            "🖼️ Restauración (Antes / Después)",
-            "🔬 Auditoría de Alucinaciones (Heatmap)"
-        ])
-
-        with tab_restore:
-            image_comparison(
-                img1=st.session_state.img_input,
-                img2=st.session_state.img_output,
-                label1="Original (Input)",
-                label2=f"Restaurada IA (2x {st.session_state.categoria.title()}) ✨",
-                starting_position=50,
-                show_labels=True,
-                make_responsive=True,
-                in_memory=True
-            )
-
-            buf = BytesIO()
-            st.session_state.img_output.save(buf, format="PNG")
-            st.download_button(
-                label="📥 Descargar Master Restaurada (PNG)",
-                data=buf.getvalue(),
-                file_name="restaurada_master.png",
-                mime="image/png",
-                use_container_width=True
-            )
-
-        with tab_forensic:
+        # NUEVAS CARACTERÍSTICAS SIN REPETICIÓN DEBO DEL BOTÓN ROJO
+        if st.session_state.img_restaurada is not None:
             st.markdown("""
-            <div style="margin-bottom: 12px; font-size: 0.82rem; color: #94a3b8;">
-                El mapa de calor superpone en <b>rojo y amarillo</b> las regiones con mayor gradiente residual (nuevas texturas introducidas por la máscara de enfoque), mientras que los tonos <b>azules</b> señalan residuo nulo (fidelidad pura a zonas lisas).
+            <div style="margin-top: 18px; margin-bottom: 6px; font-size: 0.70rem; font-weight: 700; text-transform: uppercase; color: #64748b; letter-spacing: 0.08em;">
+                📊 Características del Procesamiento
             </div>
             """, unsafe_allow_html=True)
 
-            if st.session_state.img_heatmap:
-                image_comparison(
-                    img1=st.session_state.img_output,
-                    img2=st.session_state.img_heatmap,
-                    label1="Restaurada IA",
-                    label2="Mapa de Calor Residual (JET)",
-                    starting_position=50,
-                    show_labels=True,
-                    make_responsive=True,
-                    in_memory=True
-                )
+            # Tarjeta 1: SSIM Estructural
+            st.markdown(f"""
+            <div class="side-metric-card">
+                <div class="side-metric-title">SSIM Estructural</div>
+                <div class="side-metric-num" style="color: #34d399;">{st.session_state.ssim_score:.4f}</div>
+            </div>
+            """, unsafe_allow_html=True)
 
-                sub_c1, sub_c2, sub_c3 = st.columns(3)
-                with sub_c1:
-                    st.metric("Fidelity Score", f"{st.session_state.fidelity_score:.4f}", help="Cercanía a 1.0 indica alta fidelidad estructural")
-                with sub_c2:
-                    st.metric("Ratio de Alucinaciones", f"{st.session_state.hallucination_ratio:.1f}%", help="Porcentaje de píxeles con variaciones de alta frecuencia")
-                with sub_c3:
-                    st.metric("SSIM Estructural", f"{st.session_state.ssim_score:.4f}", help="Similitud estructural respecto al original")
+            # Tarjeta 2: Ganancia de Nitidez (Delta Laplaciano)
+            st.markdown(f"""
+            <div class="side-metric-card">
+                <div class="side-metric-title">Ganancia de Nitidez (Δ)</div>
+                <div class="side-metric-num" style="color: #a78bfa;">+{st.session_state.delta_nitidez:.1f}%</div>
+            </div>
+            """, unsafe_allow_html=True)
+
+            # Tarjeta 3: Resolución Escalada
+            st.markdown(f"""
+            <div class="side-metric-card">
+                <div class="side-metric-title">Resolución de Salida (2x)</div>
+                <div class="side-metric-num" style="font-size: 1.05rem; color: #f8fafc; margin-top: 5px;">{st.session_state.out_res}</div>
+            </div>
+            """, unsafe_allow_html=True)
+
+            # Botón de Descarga
+            buffer_dl = io.BytesIO()
+            st.session_state.img_restaurada.save(buffer_dl, format="PNG")
+            st.markdown("<div style='margin-top: 16px;'></div>", unsafe_allow_html=True)
+            st.download_button(
+                label="📥 Descargar Imagen Restaurada",
+                data=buffer_dl.getvalue(),
+                file_name="imagen_restaurada.png",
+                mime="image/png"
+            )
+
+    else:
+        st.info("Sube una imagen para comenzar.")
+
+
+# --- PREPARACIÓN DE IMÁGENES ESCALADAS PARA VISUALIZACIÓN COMPLETA ---
+TARGET_PREVIEW_HEIGHT = 700
+
+img_orig_display = None
+img_rest_display = None
+img_heat_display = None
+
+if st.session_state.img_restaurada is not None and st.session_state.img_original is not None:
+    w_rest_raw, h_rest_raw = st.session_state.img_restaurada.size
+    
+    scale_factor = max(1.0, TARGET_PREVIEW_HEIGHT / float(h_rest_raw))
+    display_w = int(w_rest_raw * scale_factor)
+    display_h = int(h_rest_raw * scale_factor)
+
+    img_orig_display = st.session_state.img_original.resize((display_w, display_h), Image.Resampling.NEAREST)
+    img_rest_display = st.session_state.img_restaurada.resize((display_w, display_h), Image.Resampling.LANCZOS)
+    img_heat_display = st.session_state.img_heatmap.resize((display_w, display_h), Image.Resampling.LANCZOS)
+
+
+# --- COLUMNA 2 (CENTRAL): COMPARADOR ANTES / DESPUÉS ---
+with col_centro:
+    st.markdown("""
+    <div class="viewer-header">
+        🖼️ Comparativa: Original vs Restaurada
+    </div>
+    """, unsafe_allow_html=True)
+
+    if img_rest_display is not None and img_orig_display is not None:
+        image_comparison(
+            img1=img_orig_display,
+            img2=img_rest_display,
+            label1="Original (Baja Res)",
+            label2=f"Restaurada ({st.session_state.categoria.capitalize()})",
+            width=display_w,
+            starting_position=50,
+            show_labels=True,
+            make_responsive=True,
+            in_memory=True
+        )
     else:
         st.markdown("""
-        <div style="display:flex; flex-direction:column; align-items:center; justify-content:center; height:450px; border:2px dashed rgba(255,255,255,0.06); border-radius:12px; color:#475569; text-align:center; padding:24px;">
-            <div style="font-size:3rem; margin-bottom:12px; opacity:0.6;">⚡</div>
-            <div style="font-size:1.05rem; font-weight:600; color:#94a3b8;">Visor Panorámico en Espera</div>
-            <div style="font-size:0.82rem; color:#64748b; max-width:400px; margin-top:6px;">
-                Carga una imagen en el panel de control y presiona <b>Ejecutar Restauración + Auditoría</b> para ver tanto la restauración como la inspección forense de alucinaciones.
-            </div>
+        <div style="background: #111827; border: 2px dashed #1f2937; border-radius: 12px; height: 480px; display: flex; flex-direction: column; align-items: center; justify-content: center; color: #64748b; text-align: center; padding: 20px;">
+            <div style="font-size: 2.2rem; margin-bottom: 8px;">🖼️</div>
+            <b>Comparador Deslizante</b><br>
+            Aquí aparecerá la cortina interactiva entre la imagen original y la restaurada.
         </div>
         """, unsafe_allow_html=True)
 
-    st.markdown('</div>', unsafe_allow_html=True)
+
+# --- COLUMNA 3 (DERECHA): MAPA DE CALOR DE ALUCINACIONES ---
+with col_der:
+    st.markdown("""
+    <div class="viewer-header">
+        🔬 Auditoría de Gradientes (Mapa JET)
+    </div>
+    """, unsafe_allow_html=True)
+
+    if img_heat_display is not None:
+        st.image(
+            img_heat_display,
+            caption="Residuos de Gradiente de Sobolev: Rojo/Amarillo = Modificaciones | Azul = Zona Lisa",
+            use_container_width=True
+        )
+    else:
+        st.markdown("""
+        <div style="background: #111827; border: 2px dashed #1f2937; border-radius: 12px; height: 480px; display: flex; flex-direction: column; align-items: center; justify-content: center; color: #64748b; text-align: center; padding: 20px;">
+            <div style="font-size: 2.2rem; margin-bottom: 8px;">🔬</div>
+            <b>Mapa de Incertidumbre y Alucinaciones</b><br>
+            Aquí se proyectará el mapa de calor con los gradientes espaciales de la inferencia.
+        </div>
+        """, unsafe_allow_html=True)
