@@ -1,0 +1,5 @@
+imagen,modelo,condicion,prediccion,latencia_s
+muestra_temporal.png,MobileNetV3,limpia,paisaje,0.0307
+muestra_temporal.png,MobileNetV3,degradada,paisaje,0.0194
+muestra_temporal.png,Gemini-Flash,limpia,paisaje,4.0429
+muestra_temporal.png,Gemini-Flash,degradada,paisaje,3.5676
