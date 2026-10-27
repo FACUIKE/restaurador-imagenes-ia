@@ -1,321 +1,333 @@
 import os
+import io
 import time
-from pathlib import Path
-from io import BytesIO
-
+from dotenv import load_dotenv
 import cv2
 import numpy as np
-from PIL import Image
-from dotenv import load_dotenv
+from PIL import Image, ImageOps
 import streamlit as st
 from streamlit_image_comparison import image_comparison
 from google import genai
 
-# Cargar variables de entorno locales (.env)
 load_dotenv()
 
-# Configuración de página panorámica
+# ==========================================
+# Configuración General
+# ==========================================
 st.set_page_config(
-    page_title="Aura AI Studio | Neural Restoration",
-    page_icon="⚡",
+    page_title="VisionRestore AI",
+    page_icon="🔬",
     layout="wide",
-    initial_sidebar_state="collapsed"
+    initial_sidebar_state="collapsed",
 )
 
-# Estilos visuales Dark Glassmorphism
-st.markdown("""
-<style>
-    @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap');
+def cargar_css(ruta_archivo):
+    with open(ruta_archivo) as f:
+        st.markdown(f"<style>{f.read()}</style>", unsafe_allow_html=True)
 
-    html, body, [class*="css"] {
-        font-family: 'Plus Jakarta Sans', sans-serif;
-    }
+# Cargamos el CSS de la carpeta externa
+cargar_css("css/style.css")
+
+# ==========================================
+# Funciones de Visión y Restauración PDI
+# ==========================================
+api_key = os.getenv("GEMINI_API_KEY")
+client = genai.Client(api_key=api_key) if api_key else None
+
+def clasificar_semantica(pil_img: Image.Image) -> tuple[str, float]:
+    if not client: return "paisaje", 0.0
+    t0 = time.perf_counter()
+    prompt = "Clasifica estrictamente en: 'rostro', 'texto' o 'paisaje'. Responde solo con una de esas tres palabras en minúsculas."
+    cat = "paisaje"
+    for m in ["gemini-3.5-flash-lite", "gemini-3.8-flash"]:
+        try:
+            res = client.models.generate_content(model=m, contents=[pil_img, prompt])
+            texto = res.text.strip().lower()
+            if any(k in texto for k in ["rostro", "texto", "paisaje"]):
+                cat = next(k for k in ["rostro", "texto", "paisaje"] if k in texto)
+                break
+        except Exception:
+            continue
+    return cat, time.perf_counter() - t0
+
+def restaurar_adaptativa(img_np: np.ndarray, categoria: str, sub_modo: str = "") -> np.ndarray:
+    # Si no hay técnica seleccionada (Toggles apagados), devolvemos la imagen original
+    if not sub_modo: return img_np 
     
-    .stApp {
-        background: radial-gradient(circle at 50% 0%, #0d1527 0%, #05070d 100%);
-        color: #f1f5f9;
+    h, w = img_np.shape[:2]
+    nw, nh = int(w * 2), int(h * 2)
+    
+    if categoria == "texto":
+        escalada = cv2.resize(img_np, (nw, nh), interpolation=cv2.INTER_CUBIC)
+        
+        if sub_modo == "Trazos Desgastados (Top-Hat)":
+            gris = cv2.cvtColor(escalada, cv2.COLOR_RGB2GRAY)
+            kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (21, 21))
+            blackhat = cv2.morphologyEx(gris, cv2.MORPH_BLACKHAT, kernel)
+            blackhat_fuerte = cv2.convertScaleAbs(blackhat, alpha=2.5, beta=0)
+            resultado = cv2.subtract(gris, blackhat_fuerte)
+            resultado = cv2.normalize(resultado, None, 0, 255, cv2.NORM_MINMAX)
+            return cv2.cvtColor(resultado, cv2.COLOR_GRAY2RGB)
+            
+        elif sub_modo == "Eliminar Muaré de Pantalla (FFT 2D)":
+            gris = cv2.cvtColor(escalada, cv2.COLOR_RGB2GRAY)
+            f = np.fft.fft2(gris)
+            fshift = np.fft.fftshift(f)
+            filas, cols = gris.shape
+            crow, ccol = filas // 2 , cols // 2
+            mascara = np.ones((filas, cols), np.uint8)
+            mascara[crow-3:crow+3, :] = 0 
+            mascara[:, ccol-3:ccol+3] = 0
+            mascara[crow-40:crow+40, ccol-40:ccol+40] = 1
+            fshift = fshift * mascara
+            f_ishift = np.fft.ifftshift(fshift)
+            img_back = np.abs(np.fft.ifft2(f_ishift))
+            img_back = cv2.normalize(img_back, None, 0, 255, cv2.NORM_MINMAX).astype(np.uint8)
+            _, binarizada = cv2.threshold(img_back, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+            return cv2.cvtColor(binarizada, cv2.COLOR_GRAY2RGB)
+            
+        elif sub_modo == "Iluminación Irregular (Sauvola)":
+            gris = cv2.cvtColor(escalada, cv2.COLOR_RGB2GRAY)
+            binarizada = cv2.adaptiveThreshold(gris, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY, 21, 10)
+            return cv2.cvtColor(binarizada, cv2.COLOR_GRAY2RGB)
+            
+    elif categoria == "rostro":
+        ycbcr = cv2.cvtColor(img_np, cv2.COLOR_RGB2YCrCb)
+        y, cr, cb = cv2.split(ycbcr)
+        y_up = cv2.resize(y, (nw, nh), interpolation=cv2.INTER_CUBIC)
+        cr_up = cv2.resize(cr, (nw, nh), interpolation=cv2.INTER_CUBIC)
+        cb_up = cv2.resize(cb, (nw, nh), interpolation=cv2.INTER_CUBIC)
+        escalada = cv2.cvtColor(cv2.merge((y_up, cr_up, cb_up)), cv2.COLOR_YCrCb2RGB)
+
+        if sub_modo == "Trepidación (Deconvolución / Sharpening)":
+            kernel_sharp = np.array([[-1,-1,-1], [-1,9,-1], [-1,-1,-1]])
+            resultado = cv2.filter2D(escalada, -1, kernel_sharp)
+            return cv2.addWeighted(escalada, 0.3, resultado, 0.7, 0)
+
+        elif sub_modo == "Ruido ISO Alto (No-Local Means)":
+            return cv2.fastNlMeansDenoisingColored(escalada, None, 10, 10, 7, 21)
+
+        elif sub_modo == "Iluminación Nocturna (MSRCR / Retinex)":
+            img_float = np.float32(escalada) + 1.0
+            retinex = np.zeros_like(img_float)
+            for sigma in [15, 80, 250]:
+                blur = cv2.GaussianBlur(img_float, (0, 0), sigma)
+                retinex += np.log10(img_float) - np.log10(blur)
+            retinex = (retinex / 3.0) * 255.0
+            resultado = cv2.normalize(retinex, None, 0, 255, cv2.NORM_MINMAX)
+            resultado = cv2.convertScaleAbs(resultado, alpha=1.2, beta=10)
+            return cv2.cvtColor(resultado, cv2.COLOR_BGR2RGB)
+
+        elif sub_modo == "Suavizado de Piel (Filtro Guiado)":
+            return cv2.edgePreservingFilter(escalada, flags=cv2.RECURS_FILTER, sigma_s=60, sigma_r=0.2)
+
+        elif sub_modo == "Super-Resolución (Solo YCbCr)":
+            y_up_clahe = cv2.createCLAHE(clipLimit=1.5, tileGridSize=(8, 8)).apply(y_up)
+            return cv2.cvtColor(cv2.merge((y_up_clahe, cr_up, cb_up)), cv2.COLOR_YCrCb2RGB)
+            
+    return img_np
+
+def auditar_alucinaciones(orig_rgb: np.ndarray, rest_rgb: np.ndarray) -> tuple[np.ndarray, dict]:
+    h_r, w_r = rest_rgb.shape[:2]
+    deg_scaled = cv2.resize(cv2.cvtColor(orig_rgb, cv2.COLOR_RGB2GRAY), (w_r, h_r), interpolation=cv2.INTER_CUBIC)
+    res_g = cv2.cvtColor(rest_rgb, cv2.COLOR_RGB2GRAY)
+    g_deg = np.sqrt(cv2.Sobel(deg_scaled, cv2.CV_64F, 1, 0)**2 + cv2.Sobel(deg_scaled, cv2.CV_64F, 0, 1)**2)
+    g_res = np.sqrt(cv2.Sobel(res_g, cv2.CV_64F, 1, 0)**2 + cv2.Sobel(res_g, cv2.CV_64F, 0, 1)**2)
+    diff = np.abs(g_res - g_deg)
+    anomalias = np.where(diff > np.percentile(diff, 90), diff, 0)
+    heatmap_rgb = cv2.cvtColor(cv2.applyColorMap(cv2.normalize(anomalias, None, 0, 255, cv2.NORM_MINMAX).astype(np.uint8), cv2.COLORMAP_JET), cv2.COLOR_BGR2RGB)
+    n_orig, n_rest = float(cv2.Laplacian(deg_scaled, cv2.CV_64F).var()), float(cv2.Laplacian(res_g, cv2.CV_64F).var())
+    
+    return cv2.addWeighted(rest_rgb, 0.65, heatmap_rgb, 0.35, 0), {
+        "fid": max(0.0, min(1.0, 1.0 - ((np.mean(diff) / 255.0) * 2.0))),
+        "hal": (np.count_nonzero(anomalias) / anomalias.size) * 100.0,
+        "delta": ((n_rest - n_orig) / max(n_orig, 1.0)) * 100.0,
+        "res": f"{w_r} x {h_r} px"
     }
 
-    .saas-navbar {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        background: rgba(15, 23, 42, 0.7);
-        backdrop-filter: blur(20px);
-        border: 1px solid rgba(255, 255, 255, 0.08);
-        border-radius: 14px;
-        padding: 12px 24px;
-        margin-bottom: 20px;
-    }
+# ==========================================
+# Lógica de Exclusión Mutua para los Toggles
+# ==========================================
+def exclusion_mutua(clave_activa, lista_claves):
+    if st.session_state[clave_activa]:
+        for clave in lista_claves:
+            if clave != clave_activa:
+                st.session_state[clave] = False
 
-    .telemetry-card {
-        background: rgba(15, 23, 42, 0.6);
-        backdrop-filter: blur(14px);
-        border: 1px solid rgba(255, 255, 255, 0.06);
-        border-radius: 12px;
-        padding: 14px 18px;
-        display: flex;
-        flex-direction: column;
-        justify-content: space-between;
-        transition: transform 0.2s ease;
-    }
-    .telemetry-card:hover {
-        transform: translateY(-2px);
-    }
-    .telemetry-label {
-        font-size: 0.72rem;
-        font-weight: 600;
-        text-transform: uppercase;
-        color: #64748b;
-    }
-    .telemetry-value {
-        font-size: 1.35rem;
-        font-weight: 700;
-        color: #f8fafc;
-        margin-top: 4px;
-        font-family: 'JetBrains Mono', monospace;
-    }
+def draw_tool_card(title, desc, key, group_keys):
+    st.markdown("""<hr style="margin: 8px 0; border-color: #1f2937;">""", unsafe_allow_html=True)
+    c1, c2 = st.columns([3.5, 1], vertical_alignment="center")
+    with c1:
+        st.markdown(f"<strong style='color:#e2e8f0;'>{title}</strong><br><span style='font-size:0.75rem;color:#94a3b8;line-height:1.2;display:block;'>{desc}</span>", unsafe_allow_html=True)
+    with c2:
+        st.toggle("Activar", key=key, label_visibility="collapsed", on_change=exclusion_mutua, args=(key, group_keys))
 
-    .cockpit-panel {
-        background: rgba(15, 23, 42, 0.55);
-        backdrop-filter: blur(18px);
-        border: 1px solid rgba(255, 255, 255, 0.08);
-        border-radius: 16px;
-        padding: 20px;
-        box-shadow: 0 16px 40px -15px rgba(0, 0, 0, 0.6);
-    }
+# ==========================================
+# Inicialización de Estados
+# ==========================================
+CLAVES_TEXTO = ["t_sau", "t_top", "t_fft"]
+CLAVES_ROSTRO = ["r_sr", "r_trep", "r_iso", "r_noc", "r_piel"]
+estados_iniciales = {
+    "cat": "PENDIENTE", "lat": 0.0, "fid": 0.0, "hal": 0.0, "delta": 0.0, "res": "-", 
+    "img_orig": None, "img_rest": None, "img_heat": None, "procesar": False, "descargado": False
+}
+for k in CLAVES_TEXTO + CLAVES_ROSTRO:
+    estados_iniciales[k] = False
 
-    .badge-chip {
-        display: inline-flex;
-        align-items: center;
-        padding: 3px 10px;
-        border-radius: 9999px;
-        font-size: 0.72rem;
-        font-weight: 600;
-    }
-    .badge-cyan { background: rgba(6, 182, 212, 0.12); color: #22d3ee; border: 1px solid rgba(6, 182, 212, 0.3); }
-    .badge-green { background: rgba(16, 185, 129, 0.12); color: #34d399; border: 1px solid rgba(16, 185, 129, 0.3); }
+for k, v in estados_iniciales.items():
+    if k not in st.session_state: 
+        st.session_state[k] = v
 
-    .block-container {
-        padding-top: 1.5rem !important;
-        padding-bottom: 2rem !important;
-        max-width: 98% !important;
-    }
-</style>
-""", unsafe_allow_html=True)
-
-# Obtener clave API (soporta .env local o secrets de Streamlit Cloud)
-API_KEY = os.getenv("GEMINI_API_KEY")
-if not API_KEY and "GEMINI_API_KEY" in st.secrets:
-    API_KEY = st.secrets["GEMINI_API_KEY"]
-
-# Inicializar Estado de Sesión
-if "analyzed" not in st.session_state:
-    st.session_state.analyzed = False
-if "categoria" not in st.session_state:
-    st.session_state.categoria = "EN ESPERA"
-if "latency" not in st.session_state:
-    st.session_state.latency = 0.0
-if "orig_dims" not in st.session_state:
-    st.session_state.orig_dims = (0, 0)
-if "out_dims" not in st.session_state:
-    st.session_state.out_dims = (0, 0)
-if "img_input" not in st.session_state:
-    st.session_state.img_input = None
-if "img_output" not in st.session_state:
-    st.session_state.img_output = None
-
-# Barra superior
-st.markdown("""
-<div class="saas-navbar">
-    <div style="display:flex; align-items:center; gap:12px;">
-        <div style="width:34px; height:34px; border-radius:8px; background:linear-gradient(135deg, #06b6d4, #6366f1); display:flex; align-items:center; justify-content:center; font-size:1.1rem;">⚡</div>
-        <div>
-            <span style="font-weight:800; font-size:1.15rem; color:#ffffff;">AURA RESTORE <span style="font-size:0.75rem; color:#06b6d4; font-weight:600; padding:2px 6px; border:1px solid rgba(6,182,212,0.3); border-radius:6px; margin-left:6px;">CLOUD EDITION</span></span>
-            <div style="font-size:0.75rem; color:#64748b;">Clasificación Multimodal Gemini + Restauración Adaptativa</div>
-        </div>
-    </div>
-    <div style="display:flex; gap:10px; align-items:center;">
-        <span class="badge-chip badge-cyan">Serverless Cloud</span>
-        <span class="badge-chip badge-green">Zero-Timeout Engine</span>
-    </div>
+# ==========================================
+# Interfaz: Telemetría Superior
+# ==========================================
+st.markdown(f"""
+<div class="telemetry-row">
+    <div class="metric-card"><span class="metric-label">🏷️ Clasificación Visual</span><span class="metric-value" style="color: #60a5fa;">{st.session_state.cat.upper()}</span></div>
+    <div class="metric-card"><span class="metric-label">⏱️ Tiempo de Inferencia</span><span class="metric-value" style="color: #34d399;">{st.session_state.lat:.2f}s</span></div>
+    <div class="metric-card"><span class="metric-label">🛡️ Fidelity Score</span><span class="metric-value" style="color: #38bdf8;">{st.session_state.fid:.3f}</span></div>
+    <div class="metric-card"><span class="metric-label">⚠️ Tasa de Alucinación</span><span class="metric-value" style="color: #fbbf24;">{st.session_state.hal:.1f}%</span></div>
 </div>
 """, unsafe_allow_html=True)
 
-# 4 Métricas de Telemetría
-c1, c2, c3, c4 = st.columns(4)
-scale_txt = f"{round(st.session_state.out_dims[0] / st.session_state.orig_dims[0], 1)}x" if st.session_state.orig_dims[0] > 0 else "1x"
-res_txt = f"{st.session_state.orig_dims[0]}x{st.session_state.orig_dims[1]} → {st.session_state.out_dims[0]}x{st.session_state.out_dims[1]}" if st.session_state.out_dims[0] > 0 else "Entrada / Salida"
+# ==========================================
+# Interfaz: 3 Columnas Estructuradas
+# ==========================================
+col_izq, col_centro, col_der = st.columns([1.2, 1.3, 1.3], gap="large")
 
-with c1:
-    st.markdown(f"""
-    <div class="telemetry-card">
-        <div class="telemetry-label">🏷️ Clasificación Visual</div>
-        <div class="telemetry-value" style="color: #38bdf8;">{st.session_state.categoria.upper()}</div>
-        <span style="font-size:0.7rem; color:#64748b;">Gemini 3.8 Flash Vision</span>
-    </div>
-    """, unsafe_allow_html=True)
+# COLUMNA 1: Controles 
+with col_izq:
+    with st.container():
+        st.markdown('<div class="col-header">🕹️ Ingesta y Control</div>', unsafe_allow_html=True)
+        archivo = st.file_uploader("Seleccionar imagen a restaurar", type=["png", "jpg", "jpeg", "webp"], label_visibility="collapsed")
+        
+        if archivo:
+            pil_raw = ImageOps.exif_transpose(Image.open(archivo)).convert("RGB")
+            
+            if st.button("⚡ Analizar Fotografía", key="btn_ejecutar_principal"):
+                with st.spinner("Clasificando..."):
+                    cat, lat = clasificar_semantica(pil_raw)
+                    st.session_state.update({"img_orig": pil_raw, "cat": cat, "lat": lat, "procesar": True})
+                    # Apagamos todos los toggles por si el usuario carga una nueva imagen
+                    for k in CLAVES_TEXTO + CLAVES_ROSTRO:
+                        st.session_state[k] = False
+                    st.rerun()
 
-with c2:
-    st.markdown(f"""
-    <div class="telemetry-card">
-        <div class="telemetry-label">⏱️ Tiempo de Inferencia</div>
-        <div class="telemetry-value" style="color: #34d399;">{st.session_state.latency:.2f}s</div>
-        <span style="font-size:0.7rem; color:#64748b;">Latencia total Cloud</span>
-    </div>
-    """, unsafe_allow_html=True)
+        # Despliegue de Menús Dinámicos
+        if st.session_state.procesar and st.session_state.img_orig is not None:
+            sub_modo = None
+            
+            if st.session_state.cat == "texto":
+                st.markdown('<div class="col-header" style="margin-top:24px; color:#60a5fa;">📄 Herramientas de Documento</div>', unsafe_allow_html=True)
+                
+                draw_tool_card("💡 Aclarar Fondo y Sombras", "Separa el texto del fondo, logrando legibilidad incluso con iluminación irregular.", "t_sau", CLAVES_TEXTO)
+                draw_tool_card("✍️ Remarcar Letras Borrosas", "Rescata trazos finos empastados o gastados por el tiempo mediante morfología.", "t_top", CLAVES_TEXTO)
+                draw_tool_card("📺 Quitar Rayas de Pantalla", "Elimina el efecto muaré y patrones ondulados generados por monitores.", "t_fft", CLAVES_TEXTO)
+                
+                if st.session_state.t_sau: sub_modo = "Iluminación Irregular (Sauvola)"
+                elif st.session_state.t_top: sub_modo = "Trazos Desgastados (Top-Hat)"
+                elif st.session_state.t_fft: sub_modo = "Eliminar Muaré de Pantalla (FFT 2D)"
 
-with c3:
-    st.markdown(f"""
-    <div class="telemetry-card">
-        <div class="telemetry-label">🔬 Escalado & Resolución</div>
-        <div class="telemetry-value" style="color: #fbbf24;">{scale_txt}</div>
-        <span style="font-size:0.7rem; color:#64748b;">{res_txt}</span>
-    </div>
-    """, unsafe_allow_html=True)
+            elif st.session_state.cat == "rostro":
+                st.markdown('<div class="col-header" style="margin-top:24px; color:#f472b6;">👤 Herramientas de Retrato</div>', unsafe_allow_html=True)
+                
+                draw_tool_card("🔍 Mejorar Definición (HD)", "Amplía la captura mejorando definición sin afectar los colores reales.", "r_sr", CLAVES_ROSTRO)
+                draw_tool_card("📳 Arreglar Foto Movida", "Corrige ligero desenfoque por movimiento de mano (trepidación).", "r_trep", CLAVES_ROSTRO)
+                draw_tool_card("🌌 Limpiar Lluvia o Grano", "Elimina grano (ISO alto) nocturno sin que la piel parezca plástico.", "r_iso", CLAVES_ROSTRO)
+                draw_tool_card("💡 Iluminar Foto Oscura", "Equilibra luz irregular y aclara sombras pronunciadas en la noche.", "r_noc", CLAVES_ROSTRO)
+                draw_tool_card("✨ Suavizado Mágico Piel", "Suavizado estético que protege bordes críticos como los anteojos.", "r_piel", CLAVES_ROSTRO)
+                
+                if st.session_state.r_sr: sub_modo = "Super-Resolución (Solo YCbCr)"
+                elif st.session_state.r_trep: sub_modo = "Trepidación (Deconvolución / Sharpening)"
+                elif st.session_state.r_iso: sub_modo = "Ruido ISO Alto (No-Local Means)"
+                elif st.session_state.r_noc: sub_modo = "Iluminación Nocturna (MSRCR / Retinex)"
+                elif st.session_state.r_piel: sub_modo = "Suavizado de Piel (Filtro Guiado)"
 
-with c4:
-    estado_api = "Conectada" if API_KEY else "Falta API Key"
-    color_api = "#34d399" if API_KEY else "#f87171"
-    st.markdown(f"""
-    <div class="telemetry-card">
-        <div class="telemetry-label">🔑 Estado API Gemini</div>
-        <div class="telemetry-value" style="color: {color_api}; font-size:1.15rem;">{estado_api}</div>
-        <span style="font-size:0.7rem; color:#64748b;">Free Tier Serverless</span>
-    </div>
-    """, unsafe_allow_html=True)
+            # Procesamiento Matemático Central
+            img_np = np.array(st.session_state.img_orig)
+            rest_np = restaurar_adaptativa(img_np, st.session_state.cat, sub_modo=sub_modo)
+            heat_np, metrics = auditar_alucinaciones(img_np, rest_np)
+            
+            st.session_state.img_rest = Image.fromarray(rest_np)
+            st.session_state.img_heat = Image.fromarray(heat_np)
+            st.session_state.fid = metrics["fid"]
+            st.session_state.hal = metrics["hal"]
+            st.session_state.delta = metrics["delta"]
+            st.session_state.res = metrics["res"]
+            
+            # --- Animación del Botón de Descarga ---
+            buf = io.BytesIO()
+            st.session_state.img_rest.save(buf, format="PNG")
+            
+            btn_container = st.empty()
+            
+            def marcar_descarga():
+                st.session_state.descargado = True
+                
+            if st.session_state.descargado:
+                with btn_container.container():
+                    st.markdown('<div class="download-success">', unsafe_allow_html=True)
+                    st.download_button(
+                        label="Descargado", 
+                        data=buf.getvalue(), 
+                        file_name="restaurada.png", 
+                        mime="image/png", 
+                        key="btn_descarga_done"
+                    )
+                    st.markdown('</div>', unsafe_allow_html=True)
+                time.sleep(3)
+                st.session_state.descargado = False
+                st.rerun()
+            else:
+                with btn_container.container():
+                    st.download_button(
+                        label="📥 Descargar Imagen", 
+                        data=buf.getvalue(), 
+                        file_name="restaurada.png", 
+                        mime="image/png", 
+                        key="btn_descarga",
+                        on_click=marcar_descarga
+                    )
+            
+            # Tarjetas de Datos Debajo del Botón
+            st.markdown(f'''
+            <div class="col-header" style="margin-top:32px; font-size:0.75rem;">📊 Características del Procesamiento</div>
+            <div class="side-card"><span class="side-title">Ganancia de Nitidez (Δ)</span><span class="side-val" style="color:#a78bfa;">{"+" if st.session_state.delta > 0 else ""}{st.session_state.delta:.1f}%</span></div>
+            <div class="side-card"><span class="side-title">Resolución de Salida (2x)</span><span class="side-val" style="color:#f8fafc;">{st.session_state.res}</span></div>
+            ''', unsafe_allow_html=True)
 
-st.write("")
-
-# Funciones de Soporte
-def clasificar_con_gemini(pil_image: Image.Image, api_key: str) -> str:
-    client = genai.Client(api_key=api_key)
-    prompt = """
-    Analiza esta imagen y clasifícala estrictamente en una de estas 3 opciones:
-    - rostro
-    - texto
-    - paisaje
-    
-    Responde ÚNICAMENTE con una sola palabra en minúsculas: 'rostro', 'texto' o 'paisaje'.
-    """
-    response = client.models.generate_content(
-        model="gemini-3.5-flash-lite",
-        contents=[pil_image, prompt]
-    )
-    cat = response.text.strip().lower()
-    if cat not in ["rostro", "texto", "paisaje"]:
-        return "paisaje"
-    return cat
-
-def restaurar_imagen(pil_img: Image.Image, categoria: str) -> Image.Image:
-    # Conversión PIL -> OpenCV BGR
-    img_cv = cv2.cvtColor(np.array(pil_img), cv2.COLOR_RGB2BGR)
-    h, w = img_cv.shape[:2]
-
-    if categoria == "texto":
-        denoised = cv2.bilateralFilter(img_cv, d=9, sigmaColor=75, sigmaSpace=75)
-        upscaled = cv2.resize(denoised, (w * 2, h * 2), interpolation=cv2.INTER_CUBIC)
-        gaussian = cv2.GaussianBlur(upscaled, (0, 0), 2.0)
-        resultado = cv2.addWeighted(upscaled, 1.5, gaussian, -0.5, 0)
-    elif categoria == "rostro":
-        denoised = cv2.fastNlMeansDenoisingColored(img_cv, None, 6, 6, 7, 21)
-        upscaled = cv2.resize(denoised, (w * 2, h * 2), interpolation=cv2.INTER_LANCZOS4)
-        kernel = np.array([[0, -0.5, 0], [-0.5, 3.0, -0.5], [0, -0.5, 0]])
-        resultado = cv2.filter2D(upscaled, -1, kernel)
-    else:  # paisaje / general
-        upscaled = cv2.resize(img_cv, (w * 2, h * 2), interpolation=cv2.INTER_LANCZOS4)
-        lab = cv2.cvtColor(upscaled, cv2.COLOR_BGR2LAB)
-        l, a, b = cv2.split(lab)
-        clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))
-        cl = clahe.apply(l)
-        resultado = cv2.cvtColor(cv2.merge((cl, a, b)), cv2.COLOR_LAB2BGR)
-
-    # Conversión OpenCV BGR -> PIL RGB
-    return Image.fromarray(cv2.cvtColor(resultado, cv2.COLOR_BGR2RGB))
-
-# Workspace: Panel Izquierdo (Ingesta) y Panel Derecho (Visor Interactivo)
-col_left, col_right = st.columns([1, 2.3], gap="medium")
-
-with col_left:
-    st.markdown('<div class="cockpit-panel">', unsafe_allow_html=True)
-    st.markdown("<h4 style='margin-top:0; color:#f8fafc; font-size:1rem; font-weight:700;'>🕹️ Ingesta y Control</h4>", unsafe_allow_html=True)
-
-    if not API_KEY:
-        st.warning("⚠️ Ingresa tu GEMINI_API_KEY en tu archivo `.env` o en los Secrets de Streamlit.")
-
-    uploaded = st.file_uploader("Seleccionar imagen a restaurar", type=["jpg", "jpeg", "png", "webp"])
-
-    if uploaded is not None:
-        pil_in = Image.open(uploaded)
-        st.session_state.img_input = pil_in
-        st.session_state.orig_dims = (pil_in.width, pil_in.height)
-
-        st.markdown(f"""
-        <div style="margin: 10px 0; padding: 10px; background: rgba(0,0,0,0.3); border-radius: 8px; border: 1px solid rgba(255,255,255,0.05); font-size: 0.8rem; color:#94a3b8;">
-            📁 <b>Archivo:</b> {uploaded.name}<br>
-            📏 <b>Resolución Original:</b> {pil_in.width} x {pil_in.height} px
-        </div>
-        """, unsafe_allow_html=True)
-
-        if st.button("⚡ Ejecutar Restauración Cloud", type="primary", use_container_width=True, disabled=not API_KEY):
-            t0 = time.time()
-            with st.spinner("1. Clasificando con Gemini Vision API..."):
-                cat = clasificar_con_gemini(pil_in, API_KEY)
-                st.session_state.categoria = cat
-
-            with st.spinner(f"2. Aplicando restauración adaptativa para [{cat.upper()}]..."):
-                pil_out = restaurar_imagen(pil_in, cat)
-                st.session_state.img_output = pil_out
-                st.session_state.out_dims = (pil_out.width, pil_out.height)
-
-            st.session_state.latency = time.time() - t0
-            st.session_state.analyzed = True
-            st.rerun()
-    else:
-        st.markdown("""
-        <div style="border: 2px dashed rgba(255,255,255,0.08); border-radius: 10px; padding: 30px 15px; text-align: center; color: #64748b; font-size: 0.85rem;">
-            Arrastra una fotografía aquí para comenzar
-        </div>
-        """, unsafe_allow_html=True)
-
-    st.markdown('</div>', unsafe_allow_html=True)
-
-with col_right:
-    st.markdown('<div class="cockpit-panel">', unsafe_allow_html=True)
-    st.markdown("<h4 style='margin-top:0; color:#f8fafc; font-size:1rem; font-weight:700;'>🖼️ Inspección Interactiva Antes / Después</h4>", unsafe_allow_html=True)
-
-    if st.session_state.analyzed and st.session_state.img_input and st.session_state.img_output:
-        image_comparison(
-            img1=st.session_state.img_input,
-            img2=st.session_state.img_output,
-            label1="Original (Input)",
-            label2="Restaurada IA (Cloud 2x) ✨",
-            starting_position=50,
-            show_labels=True,
-            make_responsive=True,
-            in_memory=True
-        )
-
-        # Botón de Descarga directa en memoria
-        buf = BytesIO()
-        st.session_state.img_output.save(buf, format="PNG")
-        st.download_button(
-            label="📥 Descargar Imagen Restaurada (PNG)",
-            data=buf.getvalue(),
-            file_name="restaurada_master.png",
-            mime="image/png",
-            use_container_width=True
-        )
-    else:
-        st.markdown("""
-        <div style="display:flex; flex-direction:column; align-items:center; justify-content:center; height:450px; border:2px dashed rgba(255,255,255,0.06); border-radius:12px; color:#475569; text-align:center; padding:24px;">
-            <div style="font-size:3rem; margin-bottom:12px; opacity:0.6;">⚡</div>
-            <div style="font-size:1.05rem; font-weight:600; color:#94a3b8;">Visor Panorámico en Espera</div>
-            <div style="font-size:0.82rem; color:#64748b; max-width:400px; margin-top:6px;">
-                Carga una imagen en el panel de control y presiona <b>Ejecutar Restauración Cloud</b> para ver el deslizador comparativo.
+# COLUMNA 2: Comparador
+with col_centro:
+    with st.container():
+        st.markdown('<div class="col-header">🖼️ Comparativa: Original vs Restaurada</div>', unsafe_allow_html=True)
+        if st.session_state.img_rest and st.session_state.img_orig:
+            w, h = st.session_state.img_rest.size
+            scale = max(1.0, 520 / float(h))
+            dw, dh = int(w * scale), int(h * scale)
+            image_comparison(
+                img1=st.session_state.img_orig.resize((dw, dh), Image.NEAREST),
+                img2=st.session_state.img_rest.resize((dw, dh), Image.LANCZOS),
+                label1="Original", label2="Restaurada",
+                width=dw, starting_position=50, show_labels=True, make_responsive=True, in_memory=True
+            )
+        else:
+            st.markdown("""
+            <div class="empty-state">
+                <span class="empty-icon">🖼️</span>
+                <p class="empty-text">Aquí aparecerá la cortina interactiva entre la imagen original y la restaurada.</p>
             </div>
-        </div>
-        """, unsafe_allow_html=True)
+            """, unsafe_allow_html=True)
 
-    st.markdown('</div>', unsafe_allow_html=True)
-
+# COLUMNA 3: Heatmap
+with col_der:
+    with st.container():
+        st.markdown('<div class="col-header">🔬 Auditoría de Gradientes (Mapa JET)</div>', unsafe_allow_html=True)
+        if st.session_state.img_heat:
+            st.image(st.session_state.img_heat, caption="Rojo/Amarillo = Modificaciones | Azul = Fidelidad Pura", width="stretch")
+        else:
+            st.markdown("""
+            <div class="empty-state">
+                <span class="empty-icon">🔬</span>
+                <p class="empty-text">Aquí se proyectará el mapa de calor con los gradientes residuales de Sobel.</p>
+            </div>
+            """, unsafe_allow_html=True)

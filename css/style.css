@@ -1,0 +1,215 @@
+/* ==========================================
+   Configuración Base
+========================================== */
+.stApp { 
+    background-color: #0b0f19; 
+    color: #e2e8f0; 
+}
+
+/* ==========================================
+   Métricas y Telemetría
+========================================== */
+.telemetry-row { 
+    display: grid; 
+    grid-template-columns: repeat(4, 1fr); 
+    gap: 15px; 
+    margin-bottom: 20px; 
+}
+
+.metric-card { 
+    background: #111827; 
+    border: 1px solid #1f2937; 
+    border-radius: 12px; 
+    padding: 15px 20px; 
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.4); 
+}
+
+.metric-label { 
+    font-size: 0.70rem; 
+    font-weight: 700; 
+    text-transform: uppercase; 
+    color: #94a3b8; 
+    margin-bottom: 4px; 
+    display: block; 
+}
+
+.metric-value { 
+    font-size: 1.5rem; 
+    font-weight: 800; 
+    display: block; 
+    line-height: 1.2; 
+}
+
+.metric-sub { 
+    font-size: 0.70rem; 
+    color: #64748b; 
+    margin-top: 4px; 
+    display: block; 
+}
+
+/* ==========================================
+   Contenedores de Columnas Streamlit
+========================================== */
+div[data-testid="stVerticalBlock"] > div > div[data-testid="stVerticalBlock"] {
+    background-color: #111827; 
+    border: 1px solid #1f2937; 
+    border-radius: 12px; 
+    padding: 20px;
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.2); 
+    height: 100%;
+}
+
+.col-header { 
+    font-size: 0.85rem; 
+    font-weight: 700; 
+    text-transform: uppercase; 
+    color: #f8fafc; 
+    margin-bottom: 16px; 
+    display: flex; 
+    align-items: center; 
+    gap: 8px; 
+}
+
+.col-subheader { 
+    font-size: 0.80rem; 
+    color: #cbd5e1; 
+    margin-bottom: 8px; 
+    font-weight: 500;
+}
+
+/* ==========================================
+   Tarjetas de Características de Procesamiento
+========================================== */
+.side-card { 
+    background: #0b0f19; 
+    border: 1px solid #1f2937; 
+    border-radius: 8px; 
+    padding: 12px 16px; 
+    margin-top: 12px; 
+}
+
+.side-title { 
+    font-size: 0.70rem; 
+    text-transform: uppercase; 
+    color: #94a3b8; 
+    font-weight: 700; 
+    display: block; 
+    margin-bottom: 4px; 
+}
+
+.side-val { 
+    font-size: 1.25rem; 
+    font-weight: 800; 
+    display: block; 
+}
+
+/* ==========================================
+   Componentes de Interfaz
+========================================== */
+div[data-testid="stFileUploader"] > section { 
+    border: 1px dashed #374151; 
+    background-color: #171d2b; 
+    border-radius: 10px; 
+    padding: 12px 16px; 
+}
+
+/* Botón de Ejecutar Análisis (Píldora Gradiente) */
+.stButton > button { 
+    width: 100%; 
+    background: linear-gradient(135deg, #a855f7 0%, #3b82f6 100%); 
+    color: #ffffff !important; 
+    font-weight: 700; 
+    font-size: 0.95rem;
+    border-radius: 50px; 
+    border: none; 
+    padding: 12px 20px; 
+    margin-top: 10px; 
+    box-shadow: 0 4px 15px rgba(59, 130, 246, 0.3);
+    transition: all 0.3s ease;
+    display: flex;
+    justify-content: flex-start;
+}
+
+.stButton > button:hover { 
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgba(59, 130, 246, 0.5); 
+    background: linear-gradient(135deg, #9333ea 0%, #2563eb 100%);
+}
+
+/* ==========================================
+   Botón de Descarga Animado
+========================================== */
+/* Estado Inicial */
+.stDownloadButton > button { 
+    width: 100%; 
+    background-color: #1f2937; 
+    color: #ffffff !important; 
+    border: 1px solid #3b82f6; 
+    border-radius: 50px; 
+    font-weight: 700; 
+    padding: 12px; 
+    margin-top: 16px;
+    transition: all 0.4s cubic-bezier(0.39, 2.01, 0.27, 0.75);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+.stDownloadButton > button:hover {
+    background-color: #3b82f6;
+    box-shadow: 0 4px 15px rgba(59, 130, 246, 0.4);
+}
+
+/* Estado de Éxito (Encogido) */
+.download-success .stDownloadButton > button {
+    background-color: #10b981 !important; 
+    border-color: #10b981 !important;
+    width: 60px !important; 
+    height: 60px !important;
+    padding: 0 !important;
+    margin: 16px auto 0 auto !important; 
+    color: transparent !important; 
+    position: relative;
+}
+
+/* Tilde Verde Inyectada */
+.download-success .stDownloadButton > button::after {
+    content: "✓";
+    position: absolute;
+    color: white;
+    font-size: 28px;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    animation: tick-pop 0.3s ease-out forwards;
+}
+
+@keyframes tick-pop {
+    0% { transform: translate(-50%, -50%) scale(0); opacity: 0; }
+    100% { transform: translate(-50%, -50%) scale(1); opacity: 1; }
+}
+
+/* ==========================================
+   Estados Vacíos (Placeholders)
+========================================== */
+.empty-state { 
+    display: flex; 
+    flex-direction: column; 
+    align-items: center; 
+    justify-content: center; 
+    height: 500px; 
+    text-align: center; 
+    color: #64748b; 
+}
+
+.empty-icon { 
+    font-size: 3rem; 
+    margin-bottom: 16px; 
+    display: block; 
+}
+
+.empty-text { 
+    font-size: 0.95rem; 
+    line-height: 1.5; 
+    max-width: 80%; 
+}
