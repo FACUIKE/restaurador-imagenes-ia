@@ -36,7 +36,6 @@ def base64_to_img(b64_str):
     img_bgr = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
     return cv2.cvtColor(img_bgr, cv2.COLOR_BGR2RGB)
 
-# Modelos Pydantic para ingesta JSON estricta (Evita errores Form/Multipart)
 class ImageRequest(BaseModel):
     image_b64: str
 
@@ -83,12 +82,19 @@ async def classify_image(req: ImageRequest):
 @app.post("/api/process")
 async def process_image(req: ProcessRequest):
     img_np = base64_to_img(req.image_b64)
-    
     h, w = img_np.shape[:2]
+    
+    # SEGURIDAD: Si no hay filtro seleccionado, devolvemos datos base inmediatos.
+    if not req.sub_modo:
+        return {
+            "restaurada_b64": req.image_b64,
+            "heatmap_b64": req.image_b64,
+            "metricas": { "fid": 1.0, "hal": 0.0, "delta": 0.0, "res": f"{w} x {h} px" }
+        }
+
     nw, nh = int(w * 2), int(h * 2)
     rest_np = img_np.copy()
     
-    # --- MATEMÁTICA EXACTA PDI CON CONTROL DE INTENSIDAD ---
     if req.categoria == "texto":
         escalada = cv2.resize(img_np, (nw, nh), interpolation=cv2.INTER_CUBIC)
         
@@ -165,7 +171,7 @@ async def process_image(req: ProcessRequest):
             sigma_s_val = int(req.intensidad) if req.intensidad else 60
             rest_np = cv2.edgePreservingFilter(escalada, flags=cv2.RECURS_FILTER, sigma_s=sigma_s_val, sigma_r=0.2)
 
-    # --- Auditoría de Gradientes y Métricas ---
+    # --- Auditoría ---
     h_r, w_r = rest_np.shape[:2]
     deg_scaled = cv2.resize(cv2.cvtColor(img_np, cv2.COLOR_RGB2GRAY), (w_r, h_r), interpolation=cv2.INTER_CUBIC)
     res_g = cv2.cvtColor(rest_np, cv2.COLOR_RGB2GRAY)
@@ -185,7 +191,7 @@ async def process_image(req: ProcessRequest):
         "heatmap_b64": img_to_base64(cv2.addWeighted(rest_np, 0.65, heatmap_rgb, 0.35, 0)),
         "metricas": {
             "fid": round(max(0.0, min(1.0, 1.0 - ((np.mean(diff) / 255.0) * 2.0))), 3),
-            "hal": round((np.count_nonzero(anomalias) / anomalias.size) * 100.0, 1),
+            "hal": round((np.count_nonzero(anomalias) / max(anomalias.size, 1)) * 100.0, 1),
             "delta": round(((n_rest - n_orig) / max(n_orig, 1.0)) * 100.0, 1),
             "res": f"{w_r} x {h_r} px"
         }

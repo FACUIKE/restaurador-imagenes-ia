@@ -77,7 +77,11 @@ Define en `.env`:
 python backend/server.py
 cd frontend
 python -m http.server 3000
+
+http://localhost:3000/
 ```
+
+
 
 tesis-experimentos/
 │

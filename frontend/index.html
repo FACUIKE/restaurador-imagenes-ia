@@ -11,26 +11,10 @@
     
     <!-- Telemetría Superior -->
     <header class="telemetry-bar">
-      <div class="metric-card">
-        <span class="metric-label">🏷️ Clasificación Visual</span>
-        <span class="metric-value text-blue" id="val-categoria">PENDIENTE</span>
-        <span class="metric-sub">Enrutador semántico</span>
-      </div>
-      <div class="metric-card">
-        <span class="metric-label">⏱️ Tiempo de Inferencia</span>
-        <span class="metric-value text-green" id="val-latencia">0.0s</span>
-        <span class="metric-sub">Latencia de ejecución</span>
-      </div>
-      <div class="metric-card">
-        <span class="metric-label">🛡️ Fidelity Score</span>
-        <span class="metric-value text-sky" id="val-fidelity">0.00</span>
-        <span class="metric-sub">Confiabilidad estructural [0-1]</span>
-      </div>
-      <div class="metric-card">
-        <span class="metric-label">⚠️ Tasa de Alucinación</span>
-        <span class="metric-value text-amber" id="val-alucinacion">0.0%</span>
-        <span class="metric-sub">Discrepancia de gradiente</span>
-      </div>
+      <div class="metric-card"><span class="metric-label">🏷️ Clasificación Visual</span><span class="metric-value text-blue" id="val-categoria">PENDIENTE</span><span class="metric-sub">Enrutador semántico</span></div>
+      <div class="metric-card"><span class="metric-label">⏱️ Tiempo de Inferencia</span><span class="metric-value text-green" id="val-latencia">0.0s</span><span class="metric-sub">Latencia de ejecución</span></div>
+      <div class="metric-card"><span class="metric-label">🛡️ Fidelity Score</span><span class="metric-value text-sky" id="val-fidelity">0.00</span><span class="metric-sub">Confiabilidad estructural [0-1]</span></div>
+      <div class="metric-card"><span class="metric-label">⚠️ Tasa de Alucinación</span><span class="metric-value text-amber" id="val-alucinacion">0.0%</span><span class="metric-sub">Discrepancia de gradiente</span></div>
     </header>
 
     <main class="main-layout">
@@ -48,106 +32,128 @@
         <button id="btn-analizar" class="btn-primary" style="margin-top: 15px;">⚡ Analizar Fotografía</button>
         <p id="estado" style="color:#fbbf24; font-size:12px; margin-top:10px;"></p>
 
-        <!-- MENU DOCUMENTOS -->
+        <!-- Toggle Modo Acumulativo -->
+        <div id="general-options" class="hidden general-options-card">
+            <div>
+                <strong>🔗 Modo Acumulativo</strong>
+                <span>Aplica filtros uno sobre otro.</span>
+            </div>
+            <label class="switch"><input type="checkbox" id="toggle-acumular"><span class="slider-toggle"></span></label>
+        </div>
+
+        <!-- ========================================== -->
+        <!-- MENÚ DINÁMICO: DOCUMENTOS -->
+        <!-- ========================================== -->
         <div id="menu-texto" class="hidden">
-            <h4 style="color:#60a5fa; margin-top:20px;">📄 Herramientas de Documento</h4>
+            <h4 class="menu-title">📄 Herramientas de Documento</h4>
             
-            <div class="side-card">
-                <label>
-                    <input type="radio" name="tool" value="Iluminación Irregular (Sauvola)"> 💡 Aclarar Fondo (Sauvola)
+            <div class="tool-card">
+                <label for="t-sauvola" class="tool-text">
+                    <strong>💡 Aclarar Fondo y Sombras</strong>
+                    <span>Separa el texto del fondo con iluminación irregular.</span>
                 </label>
-                <div class="slider-box hidden">
-                    <p class="slider-label">Intensidad de limpieza</p>
-                    <input type="range" id="slider-sauvola" min="1" max="30" value="10">
-                </div>
+                <label class="switch"><input type="checkbox" id="t-sauvola" class="tool-toggle" value="Iluminación Irregular (Sauvola)" data-slider="slider-sauvola"><span class="slider-toggle"></span></label>
+            </div>
+            <div class="slider-box hidden" id="slider-sauvola">
+                <p class="slider-label">Intensidad de limpieza</p>
+                <input type="range" min="1" max="30" value="10">
             </div>
 
-            <div class="side-card">
-                <label>
-                    <input type="radio" name="tool" value="Trazos Desgastados (Top-Hat)"> ✍️ Trazos (Top-Hat)
+            <div class="tool-card">
+                <label for="t-tophat" class="tool-text">
+                    <strong>✍️ Remarcar Letras Borrosas</strong>
+                    <span>Rescata trazos finos empastados o gastados.</span>
                 </label>
-                <div class="slider-box hidden">
-                    <p class="slider-label">Grosor de la tinta</p>
-                    <input type="range" id="slider-tophat" min="1" max="5" value="2.5" step="0.1">
-                </div>
+                <label class="switch"><input type="checkbox" id="t-tophat" class="tool-toggle" value="Trazos Desgastados (Top-Hat)" data-slider="slider-tophat"><span class="slider-toggle"></span></label>
+            </div>
+            <div class="slider-box hidden" id="slider-tophat">
+                <p class="slider-label">Grosor de la tinta</p>
+                <input type="range" min="1" max="5" value="2.5" step="0.1">
             </div>
 
-            <div class="side-card">
-                <label>
-                    <input type="radio" name="tool" value="Eliminar Muaré de Pantalla (FFT 2D)"> 📺 Quitar Rayas (FFT)
+            <div class="tool-card">
+                <label for="t-fft" class="tool-text">
+                    <strong>📺 Quitar Rayas de Pantalla</strong>
+                    <span>Elimina el efecto muaré de monitores.</span>
                 </label>
-                <div class="slider-box hidden">
-                    <p class="slider-label">Protección de luz base</p>
-                    <input type="range" id="slider-fft" min="10" max="100" value="40">
-                </div>
+                <label class="switch"><input type="checkbox" id="t-fft" class="tool-toggle" value="Eliminar Muaré de Pantalla (FFT 2D)" data-slider="slider-fft"><span class="slider-toggle"></span></label>
+            </div>
+            <div class="slider-box hidden" id="slider-fft">
+                <p class="slider-label">Protección de luz base</p>
+                <input type="range" min="10" max="100" value="40">
             </div>
         </div>
 
-        <!-- MENU ROSTROS -->
+        <!-- ========================================== -->
+        <!-- MENÚ DINÁMICO: ROSTROS -->
+        <!-- ========================================== -->
         <div id="menu-rostro" class="hidden">
-            <h4 style="color:#f472b6; margin-top:20px;">👤 Herramientas de Retrato</h4>
+            <h4 class="menu-title">👤 Herramientas de Retrato</h4>
             
-            <div class="side-card">
-                <label>
-                    <input type="radio" name="tool" value="Super-Resolución (Solo YCbCr)"> 🔍 Mejorar Definición (HD)
+            <div class="tool-card">
+                <label for="r-sr" class="tool-text">
+                    <strong>🔍 Mejorar Definición (HD)</strong>
+                    <span>Amplía la captura mejorando definición.</span>
                 </label>
-                <div class="slider-box hidden">
-                    <p class="slider-label">Nivel de contraste</p>
-                    <input type="range" id="slider-sr" min="1" max="5" value="1.5" step="0.1">
-                </div>
+                <label class="switch"><input type="checkbox" id="r-sr" class="tool-toggle" value="Super-Resolución (Solo YCbCr)" data-slider="slider-sr"><span class="slider-toggle"></span></label>
+            </div>
+            <div class="slider-box hidden" id="slider-sr">
+                <p class="slider-label">Nivel de contraste</p>
+                <input type="range" min="1" max="5" value="1.5" step="0.1">
             </div>
 
-            <div class="side-card">
-                <label>
-                    <input type="radio" name="tool" value="Trepidación (Deconvolución / Sharpening)"> 📳 Arreglar Foto Movida
+            <div class="tool-card">
+                <label for="r-trep" class="tool-text">
+                    <strong>📳 Arreglar Foto Movida</strong>
+                    <span>Corrige ligero desenfoque (trepidación).</span>
                 </label>
-                <div class="slider-box hidden">
-                    <p class="slider-label">Fuerza del enfoque</p>
-                    <input type="range" id="slider-trep" min="0.1" max="1.0" value="0.7" step="0.05">
-                </div>
+                <label class="switch"><input type="checkbox" id="r-trep" class="tool-toggle" value="Trepidación (Deconvolución / Sharpening)" data-slider="slider-trep"><span class="slider-toggle"></span></label>
+            </div>
+            <div class="slider-box hidden" id="slider-trep">
+                <p class="slider-label">Fuerza del enfoque</p>
+                <input type="range" min="0.1" max="1.0" value="0.7" step="0.05">
             </div>
 
-            <div class="side-card">
-                <label>
-                    <input type="radio" name="tool" value="Ruido ISO Alto (No-Local Means)"> 🌌 Limpiar Lluvia o Grano
+            <div class="tool-card">
+                <label for="r-iso" class="tool-text">
+                    <strong>🌌 Limpiar Lluvia o Grano</strong>
+                    <span>Elimina grano nocturno (ISO alto).</span>
                 </label>
-                <div class="slider-box hidden">
-                    <p class="slider-label">Limpieza de grano</p>
-                    <input type="range" id="slider-iso" min="1" max="30" value="10">
-                </div>
+                <label class="switch"><input type="checkbox" id="r-iso" class="tool-toggle" value="Ruido ISO Alto (No-Local Means)" data-slider="slider-iso"><span class="slider-toggle"></span></label>
+            </div>
+            <div class="slider-box hidden" id="slider-iso">
+                <p class="slider-label">Limpieza de grano</p>
+                <input type="range" min="1" max="30" value="10">
             </div>
 
-            <div class="side-card">
-                <label>
-                    <input type="radio" name="tool" value="Iluminación Nocturna (MSRCR / Retinex)"> 💡 Iluminar Foto Oscura
+            <div class="tool-card">
+                <label for="r-noc" class="tool-text">
+                    <strong>💡 Iluminar Foto Oscura</strong>
+                    <span>Aclara sombras pronunciadas.</span>
                 </label>
-                <div class="slider-box hidden">
-                    <p class="slider-label">Fuerza de iluminación</p>
-                    <input type="range" id="slider-noc" min="0.5" max="3.0" value="1.2" step="0.1">
-                </div>
+                <label class="switch"><input type="checkbox" id="r-noc" class="tool-toggle" value="Iluminación Nocturna (MSRCR / Retinex)" data-slider="slider-noc"><span class="slider-toggle"></span></label>
+            </div>
+            <div class="slider-box hidden" id="slider-noc">
+                <p class="slider-label">Fuerza de iluminación</p>
+                <input type="range" min="0.5" max="3.0" value="1.2" step="0.1">
             </div>
 
-            <div class="side-card">
-                <label>
-                    <input type="radio" name="tool" value="Suavizado de Piel (Filtro Guiado)"> ✨ Suavizado Mágico Piel
+            <div class="tool-card">
+                <label for="r-piel" class="tool-text">
+                    <strong>✨ Suavizado Mágico Piel</strong>
+                    <span>Suavizado estético protegiendo bordes.</span>
                 </label>
-                <div class="slider-box hidden">
-                    <p class="slider-label">Nivel mágico</p>
-                    <input type="range" id="slider-piel" min="10" max="120" value="60">
-                </div>
+                <label class="switch"><input type="checkbox" id="r-piel" class="tool-toggle" value="Suavizado de Piel (Filtro Guiado)" data-slider="slider-piel"><span class="slider-toggle"></span></label>
+            </div>
+            <div class="slider-box hidden" id="slider-piel">
+                <p class="slider-label">Nivel mágico</p>
+                <input type="range" min="10" max="120" value="60">
             </div>
         </div>
 
-        <!-- Botón Fizzy de Descarga -->
         <div id="download-wrap" class="fizzy-wrap hidden">
            <input type="checkbox" id="fizzy-cb">
-           <label for="fizzy-cb" class="fizzy-label">
-               <a id="btn-download" href="#" download="restaurada.png" class="download-cover">
-                   <span class="txt">📥 Descargar Imagen</span>
-               </a>
-               <span class="tick">✓</span>
-               <div class="particles" id="particles-box"></div>
-           </label>
+           <label for="fizzy-cb" class="fizzy-label"><a id="btn-download" href="#" download="restaurada.png" class="download-cover"><span class="txt">📥 Descargar Imagen</span></a><span class="tick">✓</span><div class="particles" id="particles-box"></div></label>
         </div>
 
         <div class="section-title">📊 Características del Procesamiento</div>
@@ -155,7 +161,7 @@
         <div class="side-card"><span class="side-title">Resolución de Salida (2x)</span><span class="side-val text-white" id="lbl-res">-</span></div>
       </aside>
 
-      <!-- PANALES CENTRALES: Comparador y Heatmap -->
+      <!-- PANELES CENTRALES -->
       <section class="viewer-panel">
         <h4>🖼️ Comparativa: Original vs Restaurada</h4>
         <div class="viewer-box comparison-container">

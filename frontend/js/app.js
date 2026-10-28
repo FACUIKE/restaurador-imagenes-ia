@@ -1,16 +1,19 @@
 document.addEventListener('DOMContentLoaded', () => {
     
-    // --- 1. Variables Globales y Selectores ---
     let currentB64 = null;
     let currentCategory = "";
+    let currentFile = null;
     
     const fileInput = document.getElementById('image-upload');
+    const dropZone = document.getElementById('drop-zone');
     const lblName = document.getElementById('file-name-display');
     const btnAnalizar = document.getElementById('btn-analizar');
     const statusTxt = document.getElementById('estado');
+    const origImg = document.getElementById('img-original');
     
     const sliderComp = document.getElementById('comp-range');
     const beforeWrapper = document.getElementById('before-wrapper');
+    const toggleAcumular = document.getElementById('toggle-acumular');
     
     // Generar Partículas Fizzy
     const pBox = document.getElementById('particles-box');
@@ -22,130 +25,211 @@ document.addEventListener('DOMContentLoaded', () => {
     pCSS += "</style>";
     document.head.insertAdjacentHTML("beforeend", pCSS);
 
-    // Animación Botón Fizzy Reset
     document.getElementById('fizzy-cb').addEventListener('change', (e) => {
         if(e.target.checked) setTimeout(() => { e.target.checked = false; }, 3000);
     });
 
-    // --- 2. Comparador Deslizante ---
+    // --- Comparador Deslizante (Cero llamadas a la API) ---
     sliderComp.addEventListener('input', (e) => {
         beforeWrapper.style.clipPath = `polygon(0 0, ${e.target.value}% 0, ${e.target.value}% 100%, 0 100%)`;
     });
 
-    // --- 3. Lector de Archivos a Base64 (Evita Form-Data) ---
-    fileInput.addEventListener('change', (e) => {
-        const file = e.target.files[0];
-        if(!file) return;
+    // --- MANEJO DE ARCHIVOS ---
+    function handleFile(file) {
+        if(!file || !file.type.startsWith('image/')) {
+            alert("Sube un archivo de imagen válido (JPG, PNG, WEBP).");
+            return;
+        }
+        
+        currentFile = file;
         lblName.innerText = file.name;
+        statusTxt.innerText = "Imagen cargada. Lista para analizar.";
+        
+        document.getElementById('menu-texto').classList.add('hidden');
+        document.getElementById('menu-rostro').classList.add('hidden');
+        document.getElementById('general-options').classList.add('hidden');
+        document.getElementById('download-wrap').classList.add('hidden');
+        
+        document.querySelectorAll('.tool-toggle').forEach(t => {
+            t.checked = false;
+            t.closest('.tool-card').classList.remove('active-tool');
+        });
+        document.querySelectorAll('.slider-box').forEach(s => s.classList.add('hidden'));
+        
+        btnAnalizar.disabled = false;
         
         const reader = new FileReader();
-        reader.onload = (e) => { currentB64 = e.target.result; };
+        reader.onload = (e) => { 
+            currentB64 = e.target.result; 
+            origImg.src = currentB64; 
+            document.getElementById('img-restaurada').src = currentB64;
+            document.getElementById('img-heatmap').src = currentB64;
+
+            document.getElementById('empty-comp').classList.add('hidden');
+            document.getElementById('empty-heat').classList.add('hidden');
+
+            beforeWrapper.classList.remove('hidden');
+            sliderComp.classList.remove('hidden');
+            document.getElementById('img-restaurada').classList.remove('hidden');
+            document.getElementById('img-heatmap').classList.remove('hidden');
+        };
         reader.readAsDataURL(file);
+    }
+
+    fileInput.addEventListener('change', (e) => handleFile(e.target.files[0]));
+    dropZone.addEventListener('dragover', (e) => { e.preventDefault(); dropZone.classList.add('dragover'); });
+    dropZone.addEventListener('dragleave', (e) => { e.preventDefault(); dropZone.classList.remove('dragover'); });
+    dropZone.addEventListener('drop', (e) => {
+        e.preventDefault(); dropZone.classList.remove('dragover');
+        if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+            handleFile(e.dataTransfer.files[0]);
+            fileInput.files = e.dataTransfer.files; 
+        }
     });
 
-    // --- 4. Enviar a Clasificar ---
+    // --- CLASIFICADOR IA ---
     btnAnalizar.addEventListener('click', async () => {
-        if (!currentB64) return alert("Sube una imagen y espera que se cargue.");
-        
-        statusTxt.innerText = "Clasificando con IA...";
-        
+        if (!currentB64) return alert("Sube una imagen primero.");
+        statusTxt.innerText = "Analizando con Inteligencia Artificial...";
         try {
             const response = await fetch("http://localhost:8000/api/classify", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ image_b64: currentB64 })
             });
-            
             const data = await response.json();
             currentCategory = data.categoria;
             
-            // UI Update
             document.getElementById('val-categoria').innerText = data.categoria.toUpperCase();
             document.getElementById('val-latencia').innerText = data.latencia.toFixed(2) + "s";
             
-            const origImg = document.getElementById('img-original');
-            origImg.src = "data:image/png;base64," + data.original_b64;
-            document.getElementById('empty-comp').classList.add('hidden');
-            beforeWrapper.classList.remove('hidden');
-            sliderComp.classList.remove('hidden');
-            
-            // Menús Dinámicos
-            document.getElementById('menu-texto').classList.add('hidden');
-            document.getElementById('menu-rostro').classList.add('hidden');
             document.getElementById(`menu-${data.categoria}`).classList.remove('hidden');
+            document.getElementById('general-options').classList.remove('hidden');
             
-            // Resetear Radios
-            document.querySelectorAll('input[type="radio"]').forEach(r => {
-                r.checked = false;
-                r.nextElementSibling.classList.add('hidden'); // Ocultar slider
-            });
-
-            statusTxt.innerText = "Listo. Selecciona una herramienta.";
-            
+            ejecutarPDIAcumulativo([]); // Reset UI
+            statusTxt.innerText = "Análisis completado. Enciende una herramienta.";
         } catch (error) {
-            statusTxt.innerText = "Error en el servidor de IA.";
+            statusTxt.innerText = "Error contactando al servidor.";
         }
     });
 
-    // --- 5. Lógica de Radio Buttons y Sliders PDI ---
-    document.querySelectorAll('input[type="radio"]').forEach(radio => {
-        radio.addEventListener('change', (e) => {
-            // Ocultar todos los sliders y mostrar el activo
-            document.querySelectorAll('.slider-box').forEach(sb => sb.classList.add('hidden'));
-            const sbox = e.target.nextElementSibling;
-            sbox.classList.remove('hidden');
+    // --- LÓGICA DE TOGGLES Y ACUMULACIÓN ---
+    
+    // Si apagan el modo acumulativo, dejamos solo el primer filtro encendido
+    toggleAcumular.addEventListener('change', (e) => {
+        if (!e.target.checked) {
+            let primero = true;
+            document.querySelectorAll('.tool-toggle:checked').forEach(t => {
+                if(primero) { primero = false; } 
+                else {
+                    t.checked = false;
+                    t.closest('.tool-card').classList.remove('active-tool');
+                    document.getElementById(t.dataset.slider).classList.add('hidden');
+                }
+            });
+            procesarFiltrosActivos();
+        }
+    });
+
+    const toggles = document.querySelectorAll('.tool-toggle');
+    toggles.forEach(toggle => {
+        toggle.addEventListener('change', (e) => {
+            const card = e.target.closest('.tool-card');
             
-            const slider = sbox.querySelector('input[type="range"]');
-            
-            // Ejecutar procesamiento con el valor inicial
-            ejecutarPDI(e.target.value, slider.value);
-            
-            // Ejecutar procesamiento al mover el slider (On-Change / On-Release)
-            slider.onchange = () => ejecutarPDI(e.target.value, slider.value);
+            if (e.target.checked) {
+                card.classList.add('active-tool');
+                
+                // Exclusión Mutua SI el botón de acumular está apagado
+                if (!toggleAcumular.checked) {
+                    toggles.forEach(t => {
+                        if (t !== e.target) {
+                            t.checked = false;
+                            t.closest('.tool-card').classList.remove('active-tool');
+                            document.getElementById(t.dataset.slider).classList.add('hidden');
+                        }
+                    });
+                }
+                document.getElementById(e.target.dataset.slider).classList.remove('hidden');
+            } else {
+                card.classList.remove('active-tool');
+                document.getElementById(e.target.dataset.slider).classList.add('hidden');
+            }
+            procesarFiltrosActivos();
         });
     });
 
-    async function ejecutarPDI(subModo, intensidadStr) {
-        statusTxt.innerText = "Calculando matemática...";
-        const intensidad = parseFloat(intensidadStr);
+    // Escuchar solo a los sliders de herramientas (ignora el comparador)
+    document.querySelectorAll('.slider-box input[type="range"]').forEach(slider => {
+        slider.addEventListener('change', () => procesarFiltrosActivos());
+    });
+
+    function procesarFiltrosActivos() {
+        const activeToggles = document.querySelectorAll('.tool-toggle:checked');
+        const filtros = [];
+        activeToggles.forEach(t => {
+            const sliderVal = document.getElementById(t.dataset.slider).querySelector('input').value;
+            filtros.push({ sub_modo: t.value, intensidad: parseFloat(sliderVal) });
+        });
+        ejecutarPDIAcumulativo(filtros);
+    }
+
+    // Procesa un array de filtros en cadena
+    async function ejecutarPDIAcumulativo(filtros) {
+        if (filtros.length === 0) {
+            document.getElementById('img-restaurada').src = currentB64;
+            document.getElementById('img-heatmap').src = currentB64;
+            document.getElementById('val-fidelity').innerText = "1.000";
+            document.getElementById('val-alucinacion').innerText = "0.0%";
+            document.getElementById('lbl-delta').innerText = "+0.0%";
+            document.getElementById('lbl-delta').style.color = "#94a3b8";
+            
+            const img = new Image();
+            img.onload = () => document.getElementById('lbl-res').innerText = `${img.width} x ${img.height} px`;
+            img.src = currentB64;
+            
+            document.getElementById('download-wrap').classList.add('hidden');
+            statusTxt.innerText = "Imagen original.";
+            return;
+        }
+
+        statusTxt.innerText = filtros.length > 1 ? "Aplicando cadena de filtros..." : "Aplicando filtro...";
+        
+        let tempB64 = currentB64;
+        let finalData = null;
 
         try {
-            const response = await fetch("http://localhost:8000/api/process", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ 
-                    image_b64: currentB64,
-                    categoria: currentCategory,
-                    sub_modo: subModo,
-                    intensidad: intensidad
-                })
-            });
+            // Ciclo de peticiones para acumular filtros sin tocar el servidor
+            for (let f of filtros) {
+                const response = await fetch("http://localhost:8000/api/process", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ 
+                        image_b64: tempB64, categoria: currentCategory,
+                        sub_modo: f.sub_modo, intensidad: f.intensidad
+                    })
+                });
+                finalData = await response.json();
+                tempB64 = "data:image/png;base64," + finalData.restaurada_b64;
+            }
             
-            const data = await response.json();
+            // Actualizar Interfaz con el último resultado
+            document.getElementById('img-restaurada').src = tempB64;
+            document.getElementById('img-heatmap').src = "data:image/png;base64," + finalData.heatmap_b64;
             
-            // Actualizar Imágenes
-            const b64_rest = "data:image/png;base64," + data.restaurada_b64;
-            document.getElementById('img-restaurada').src = b64_rest;
-            document.getElementById('img-restaurada').classList.remove('hidden');
+            document.getElementById('val-fidelity').innerText = finalData.metricas.fid.toFixed(3);
+            document.getElementById('val-alucinacion').innerText = finalData.metricas.hal + "%";
+            document.getElementById('lbl-delta').innerText = (finalData.metricas.delta > 0 ? "+" : "") + finalData.metricas.delta + "%";
+            document.getElementById('lbl-delta').style.color = finalData.metricas.delta > 0 ? "#34d399" : "#94a3b8";
+            document.getElementById('lbl-res').innerText = finalData.metricas.res;
             
-            document.getElementById('img-heatmap').src = "data:image/png;base64," + data.heatmap_b64;
-            document.getElementById('empty-heat').classList.add('hidden');
-            document.getElementById('img-heatmap').classList.remove('hidden');
-            
-            // Actualizar Métricas
-            document.getElementById('val-fidelity').innerText = data.metricas.fid.toFixed(3);
-            document.getElementById('val-alucinacion').innerText = data.metricas.hal + "%";
-            document.getElementById('lbl-delta').innerText = "+" + data.metricas.delta + "%";
-            document.getElementById('lbl-res').innerText = data.metricas.res;
-            
-            // Habilitar Botón de Descarga
             const btnDown = document.getElementById('btn-download');
-            btnDown.href = b64_rest;
+            btnDown.href = tempB64;
+            btnDown.download = currentFile.name.split('.').slice(0, -1).join('.') + "_restaurada.png";
             document.getElementById('download-wrap').classList.remove('hidden');
             
-            statusTxt.innerText = "Filtro aplicado.";
+            statusTxt.innerText = filtros.length > 1 ? "Modo Acumulativo Exitoso." : "Filtro aplicado.";
         } catch (error) {
-            statusTxt.innerText = "Error aplicando filtro.";
+            statusTxt.innerText = "Error procesando imagen.";
         }
     }
 });
