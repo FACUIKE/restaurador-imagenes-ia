@@ -1,6 +1,8 @@
 import os
 import io
 import time
+import base64
+import random
 from dotenv import load_dotenv
 import cv2
 import numpy as np
@@ -29,6 +31,78 @@ def cargar_css(ruta_archivo):
 cargar_css("css/style.css")
 
 # ==========================================
+# Generador de Botón de Descarga Animado (Fizzy)
+# ==========================================
+def get_fizzy_download_btn(img_pil: Image.Image, filename="restaurada.png"):
+    buf = io.BytesIO()
+    img_pil.save(buf, format="PNG")
+    b64_str = base64.b64encode(buf.getvalue()).decode()
+    
+    particles_css = ""
+    for i in range(1, 41):
+        x = random.randint(-80, 80)
+        y = random.randint(-80, 80)
+        color = f"hsl({random.randint(180, 220)}, 100%, 60%)"
+        particles_css += f"""
+        .fizzy-wrap input:checked ~ .fizzy-label .spots:nth-of-type({i}) {{
+            transform: translate({x}px, {y}px) scale(0);
+            background: {color};
+            opacity: 1;
+            transition: transform 0.6s cubic-bezier(0.1, 0.8, 0.2, 1), opacity 0.6s ease-out;
+        }}
+        """
+    
+    html = f"""
+    <style>
+    .fizzy-wrap {{ display: flex; justify-content: center; align-items: center; margin-top: 10px; position: relative; height: 70px; }}
+    .fizzy-wrap input {{ display: none; }}
+    .fizzy-label {{
+        display: flex; align-items: center; justify-content: center;
+        width: 240px; height: 50px;
+        border: 2px solid #3b82f6; border-radius: 50px;
+        color: #e2e8f0; font-family: sans-serif; font-weight: 700; font-size: 14px;
+        cursor: pointer; position: relative;
+        transition: all 0.3s ease; background: #0b0f19;
+    }}
+    .fizzy-label:hover {{ background: #3b82f6; color: #ffffff; box-shadow: 0 10px 20px -10px rgba(59, 130, 246, 0.5); }}
+    .fizzy-wrap input:checked ~ .fizzy-label {{
+        width: 50px; background: transparent; border-color: transparent; color: transparent; pointer-events: none;
+    }}
+    .download-cover {{
+        position: absolute; width: 100%; height: 100%; top: 0; left: 0;
+        display: flex; align-items: center; justify-content: center;
+        text-decoration: none; color: inherit; z-index: 10; border-radius: 50px;
+    }}
+    .fizzy-wrap input:checked ~ .fizzy-label .download-cover .txt {{ display: none; }}
+    .tick {{
+        position: absolute; opacity: 0; font-size: 24px; color: #34d399; transform: scale(0);
+        transition: all 0.3s ease; z-index: 1;
+    }}
+    .fizzy-wrap input:checked ~ .fizzy-label .tick {{
+        opacity: 1; transform: scale(1) rotate(360deg); transition-delay: 0.2s;
+    }}
+    .spots {{
+        position: absolute; width: 6px; height: 6px; border-radius: 50%;
+        background: #3b82f6; opacity: 0; left: 50%; top: 50%; margin-left: -3px; margin-top: -3px;
+        pointer-events: none; z-index: 0;
+    }}
+    {particles_css}
+    </style>
+    
+    <div class="fizzy-wrap">
+       <input type="checkbox" id="fizzy-cb">
+       <label for="fizzy-cb" class="fizzy-label">
+           <a href="data:image/png;base64,{b64_str}" download="{filename}" class="download-cover">
+               <span class="txt">📥 Descargar Imagen</span>
+           </a>
+           <span class="tick">✓</span>
+           {'<div class="spots"></div>' * 40}
+       </label>
+    </div>
+    """
+    return html
+
+# ==========================================
 # Funciones de Visión y Restauración PDI
 # ==========================================
 api_key = os.getenv("GEMINI_API_KEY")
@@ -50,8 +124,8 @@ def clasificar_semantica(pil_img: Image.Image) -> tuple[str, float]:
             continue
     return cat, time.perf_counter() - t0
 
-def restaurar_adaptativa(img_np: np.ndarray, categoria: str, sub_modo: str = "") -> np.ndarray:
-    # Si no hay técnica seleccionada (Toggles apagados), devolvemos la imagen original
+# Se agregó el parámetro 'intensidad' para recibir el valor del control deslizante
+def restaurar_adaptativa(img_np: np.ndarray, categoria: str, sub_modo: str = "", intensidad: float = None) -> np.ndarray:
     if not sub_modo: return img_np 
     
     h, w = img_np.shape[:2]
@@ -61,15 +135,17 @@ def restaurar_adaptativa(img_np: np.ndarray, categoria: str, sub_modo: str = "")
         escalada = cv2.resize(img_np, (nw, nh), interpolation=cv2.INTER_CUBIC)
         
         if sub_modo == "Trazos Desgastados (Top-Hat)":
+            alpha_val = intensidad if intensidad is not None else 2.5
             gris = cv2.cvtColor(escalada, cv2.COLOR_RGB2GRAY)
             kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (21, 21))
             blackhat = cv2.morphologyEx(gris, cv2.MORPH_BLACKHAT, kernel)
-            blackhat_fuerte = cv2.convertScaleAbs(blackhat, alpha=2.5, beta=0)
+            blackhat_fuerte = cv2.convertScaleAbs(blackhat, alpha=alpha_val, beta=0)
             resultado = cv2.subtract(gris, blackhat_fuerte)
             resultado = cv2.normalize(resultado, None, 0, 255, cv2.NORM_MINMAX)
             return cv2.cvtColor(resultado, cv2.COLOR_GRAY2RGB)
             
         elif sub_modo == "Eliminar Muaré de Pantalla (FFT 2D)":
+            radio = int(intensidad) if intensidad is not None else 40
             gris = cv2.cvtColor(escalada, cv2.COLOR_RGB2GRAY)
             f = np.fft.fft2(gris)
             fshift = np.fft.fftshift(f)
@@ -78,7 +154,8 @@ def restaurar_adaptativa(img_np: np.ndarray, categoria: str, sub_modo: str = "")
             mascara = np.ones((filas, cols), np.uint8)
             mascara[crow-3:crow+3, :] = 0 
             mascara[:, ccol-3:ccol+3] = 0
-            mascara[crow-40:crow+40, ccol-40:ccol+40] = 1
+            # Usamos el slider para proteger más o menos iluminación central
+            mascara[crow-radio:crow+radio, ccol-radio:ccol+radio] = 1
             fshift = fshift * mascara
             f_ishift = np.fft.ifftshift(fshift)
             img_back = np.abs(np.fft.ifft2(f_ishift))
@@ -87,8 +164,9 @@ def restaurar_adaptativa(img_np: np.ndarray, categoria: str, sub_modo: str = "")
             return cv2.cvtColor(binarizada, cv2.COLOR_GRAY2RGB)
             
         elif sub_modo == "Iluminación Irregular (Sauvola)":
+            c_val = int(intensidad) if intensidad is not None else 10
             gris = cv2.cvtColor(escalada, cv2.COLOR_RGB2GRAY)
-            binarizada = cv2.adaptiveThreshold(gris, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY, 21, 10)
+            binarizada = cv2.adaptiveThreshold(gris, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY, 21, c_val)
             return cv2.cvtColor(binarizada, cv2.COLOR_GRAY2RGB)
             
     elif categoria == "rostro":
@@ -100,14 +178,17 @@ def restaurar_adaptativa(img_np: np.ndarray, categoria: str, sub_modo: str = "")
         escalada = cv2.cvtColor(cv2.merge((y_up, cr_up, cb_up)), cv2.COLOR_YCrCb2RGB)
 
         if sub_modo == "Trepidación (Deconvolución / Sharpening)":
+            fuerza = intensidad if intensidad is not None else 0.7
             kernel_sharp = np.array([[-1,-1,-1], [-1,9,-1], [-1,-1,-1]])
             resultado = cv2.filter2D(escalada, -1, kernel_sharp)
-            return cv2.addWeighted(escalada, 0.3, resultado, 0.7, 0)
+            return cv2.addWeighted(escalada, 1.0 - fuerza, resultado, fuerza, 0)
 
         elif sub_modo == "Ruido ISO Alto (No-Local Means)":
-            return cv2.fastNlMeansDenoisingColored(escalada, None, 10, 10, 7, 21)
+            h_val = intensidad if intensidad is not None else 10.0
+            return cv2.fastNlMeansDenoisingColored(escalada, None, h_val, h_val, 7, 21)
 
         elif sub_modo == "Iluminación Nocturna (MSRCR / Retinex)":
+            alpha_val = intensidad if intensidad is not None else 1.2
             img_float = np.float32(escalada) + 1.0
             retinex = np.zeros_like(img_float)
             for sigma in [15, 80, 250]:
@@ -115,14 +196,16 @@ def restaurar_adaptativa(img_np: np.ndarray, categoria: str, sub_modo: str = "")
                 retinex += np.log10(img_float) - np.log10(blur)
             retinex = (retinex / 3.0) * 255.0
             resultado = cv2.normalize(retinex, None, 0, 255, cv2.NORM_MINMAX)
-            resultado = cv2.convertScaleAbs(resultado, alpha=1.2, beta=10)
+            resultado = cv2.convertScaleAbs(resultado, alpha=alpha_val, beta=10)
             return cv2.cvtColor(resultado, cv2.COLOR_BGR2RGB)
 
         elif sub_modo == "Suavizado de Piel (Filtro Guiado)":
-            return cv2.edgePreservingFilter(escalada, flags=cv2.RECURS_FILTER, sigma_s=60, sigma_r=0.2)
+            sigma_s_val = int(intensidad) if intensidad is not None else 60
+            return cv2.edgePreservingFilter(escalada, flags=cv2.RECURS_FILTER, sigma_s=sigma_s_val, sigma_r=0.2)
 
         elif sub_modo == "Super-Resolución (Solo YCbCr)":
-            y_up_clahe = cv2.createCLAHE(clipLimit=1.5, tileGridSize=(8, 8)).apply(y_up)
+            clip_val = intensidad if intensidad is not None else 1.5
+            y_up_clahe = cv2.createCLAHE(clipLimit=clip_val, tileGridSize=(8, 8)).apply(y_up)
             return cv2.cvtColor(cv2.merge((y_up_clahe, cr_up, cb_up)), cv2.COLOR_YCrCb2RGB)
             
     return img_np
@@ -208,15 +291,15 @@ with col_izq:
                 with st.spinner("Clasificando..."):
                     cat, lat = clasificar_semantica(pil_raw)
                     st.session_state.update({"img_orig": pil_raw, "cat": cat, "lat": lat, "procesar": True})
-                    # Apagamos todos los toggles por si el usuario carga una nueva imagen
                     for k in CLAVES_TEXTO + CLAVES_ROSTRO:
                         st.session_state[k] = False
                     st.rerun()
 
-        # Despliegue de Menús Dinámicos
         if st.session_state.procesar and st.session_state.img_orig is not None:
             sub_modo = None
+            intensidad_val = None
             
+            # --- MOTOR DE TEXTOS ---
             if st.session_state.cat == "texto":
                 st.markdown('<div class="col-header" style="margin-top:24px; color:#60a5fa;">📄 Herramientas de Documento</div>', unsafe_allow_html=True)
                 
@@ -224,10 +307,21 @@ with col_izq:
                 draw_tool_card("✍️ Remarcar Letras Borrosas", "Rescata trazos finos empastados o gastados por el tiempo mediante morfología.", "t_top", CLAVES_TEXTO)
                 draw_tool_card("📺 Quitar Rayas de Pantalla", "Elimina el efecto muaré y patrones ondulados generados por monitores.", "t_fft", CLAVES_TEXTO)
                 
-                if st.session_state.t_sau: sub_modo = "Iluminación Irregular (Sauvola)"
-                elif st.session_state.t_top: sub_modo = "Trazos Desgastados (Top-Hat)"
-                elif st.session_state.t_fft: sub_modo = "Eliminar Muaré de Pantalla (FFT 2D)"
+                # Sliders que solo aparecen si el Toggle está encendido
+                if st.session_state.t_sau: 
+                    sub_modo = "Iluminación Irregular (Sauvola)"
+                    st.markdown("<br>", unsafe_allow_html=True)
+                    intensidad_val = st.slider("🎚️ Intensidad de limpieza", min_value=1, max_value=30, value=10)
+                elif st.session_state.t_top: 
+                    sub_modo = "Trazos Desgastados (Top-Hat)"
+                    st.markdown("<br>", unsafe_allow_html=True)
+                    intensidad_val = st.slider("🎚️ Grosor de la tinta", min_value=1.0, max_value=5.0, value=2.5, step=0.1)
+                elif st.session_state.t_fft: 
+                    sub_modo = "Eliminar Muaré de Pantalla (FFT 2D)"
+                    st.markdown("<br>", unsafe_allow_html=True)
+                    intensidad_val = st.slider("🎚️ Nivel de protección de luz base", min_value=10, max_value=100, value=40)
 
+            # --- MOTOR DE ROSTROS ---
             elif st.session_state.cat == "rostro":
                 st.markdown('<div class="col-header" style="margin-top:24px; color:#f472b6;">👤 Herramientas de Retrato</div>', unsafe_allow_html=True)
                 
@@ -237,15 +331,31 @@ with col_izq:
                 draw_tool_card("💡 Iluminar Foto Oscura", "Equilibra luz irregular y aclara sombras pronunciadas en la noche.", "r_noc", CLAVES_ROSTRO)
                 draw_tool_card("✨ Suavizado Mágico Piel", "Suavizado estético que protege bordes críticos como los anteojos.", "r_piel", CLAVES_ROSTRO)
                 
-                if st.session_state.r_sr: sub_modo = "Super-Resolución (Solo YCbCr)"
-                elif st.session_state.r_trep: sub_modo = "Trepidación (Deconvolución / Sharpening)"
-                elif st.session_state.r_iso: sub_modo = "Ruido ISO Alto (No-Local Means)"
-                elif st.session_state.r_noc: sub_modo = "Iluminación Nocturna (MSRCR / Retinex)"
-                elif st.session_state.r_piel: sub_modo = "Suavizado de Piel (Filtro Guiado)"
+                # Sliders que solo aparecen si el Toggle está encendido
+                if st.session_state.r_sr: 
+                    sub_modo = "Super-Resolución (Solo YCbCr)"
+                    st.markdown("<br>", unsafe_allow_html=True)
+                    intensidad_val = st.slider("🎚️ Nivel de contraste y nitidez", min_value=1.0, max_value=5.0, value=1.5, step=0.1)
+                elif st.session_state.r_trep: 
+                    sub_modo = "Trepidación (Deconvolución / Sharpening)"
+                    st.markdown("<br>", unsafe_allow_html=True)
+                    intensidad_val = st.slider("🎚️ Fuerza del enfoque", min_value=0.1, max_value=1.0, value=0.7, step=0.05)
+                elif st.session_state.r_iso: 
+                    sub_modo = "Ruido ISO Alto (No-Local Means)"
+                    st.markdown("<br>", unsafe_allow_html=True)
+                    intensidad_val = st.slider("🎚️ Intensidad de limpieza de grano", min_value=1.0, max_value=30.0, value=10.0, step=1.0)
+                elif st.session_state.r_noc: 
+                    sub_modo = "Iluminación Nocturna (MSRCR / Retinex)"
+                    st.markdown("<br>", unsafe_allow_html=True)
+                    intensidad_val = st.slider("🎚️ Fuerza de iluminación", min_value=0.5, max_value=3.0, value=1.2, step=0.1)
+                elif st.session_state.r_piel: 
+                    sub_modo = "Suavizado de Piel (Filtro Guiado)"
+                    st.markdown("<br>", unsafe_allow_html=True)
+                    intensidad_val = st.slider("🎚️ Nivel de suavizado mágico", min_value=10, max_value=120, value=60)
 
-            # Procesamiento Matemático Central
+            # Procesamiento Matemático con el valor del slider (intensidad_val)
             img_np = np.array(st.session_state.img_orig)
-            rest_np = restaurar_adaptativa(img_np, st.session_state.cat, sub_modo=sub_modo)
+            rest_np = restaurar_adaptativa(img_np, st.session_state.cat, sub_modo=sub_modo, intensidad=intensidad_val)
             heat_np, metrics = auditar_alucinaciones(img_np, rest_np)
             
             st.session_state.img_rest = Image.fromarray(rest_np)
