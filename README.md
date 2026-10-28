@@ -74,7 +74,9 @@ Define en `.env`:
 
 ### 4. Ejecutar la aplicación
 ```bash
-streamlit run frontend/app.py
+python backend/server.py
+cd frontend
+python -m http.server 3000
 ```
 
 tesis-experimentos/

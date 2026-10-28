@@ -1,178 +1,196 @@
-import base64
-import io
 import os
 import time
-from dotenv import load_dotenv
+import base64
 import cv2
 import numpy as np
-from PIL import Image, ImageOps
-from flask import Flask, request, jsonify, send_from_directory
-from flask_cors import CORS
+from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+from pydantic import BaseModel
+from dotenv import load_dotenv
 from google import genai
 
 load_dotenv()
 
-# Servir estáticos desde ../frontend
-app = Flask(__name__, static_folder="../frontend", static_url_path="")
-CORS(app)
+app = FastAPI(title="VisionRestore API")
+
+# Permitir conexiones desde el Frontend local
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"], 
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 api_key = os.getenv("GEMINI_API_KEY")
 client = genai.Client(api_key=api_key) if api_key else None
 
-def clasificar_semantica(pil_img: Image.Image) -> tuple[str, float]:
-    if not client:
-        return "paisaje", 0.0
+def img_to_base64(img_np):
+    _, buffer = cv2.imencode('.png', cv2.cvtColor(img_np, cv2.COLOR_RGB2BGR))
+    return base64.b64encode(buffer).decode('utf-8')
+
+def base64_to_img(b64_str):
+    if "," in b64_str:
+        b64_str = b64_str.split(",")[1]
+    nparr = np.frombuffer(base64.b64decode(b64_str), np.uint8)
+    img_bgr = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+    return cv2.cvtColor(img_bgr, cv2.COLOR_BGR2RGB)
+
+# Modelos Pydantic para ingesta JSON estricta (Evita errores Form/Multipart)
+class ImageRequest(BaseModel):
+    image_b64: str
+
+class ProcessRequest(BaseModel):
+    image_b64: str
+    categoria: str
+    sub_modo: str
+    intensidad: float = None
+
+# ==========================================
+# ENDPOINT 1: Clasificación Semántica
+# ==========================================
+@app.post("/api/classify")
+async def classify_image(req: ImageRequest):
+    img_rgb = base64_to_img(req.image_b64)
+    
+    from PIL import Image
+    pil_img = Image.fromarray(img_rgb)
+    
     t0 = time.perf_counter()
-    prompt = "Clasifica estrictamente en: 'rostro', 'texto' o 'paisaje'. Responde solo con una de esas tres palabras en minúsculas."
     cat = "paisaje"
-    for m in ["gemini-3.5-flash-lite", "gemini-3.8-flash"]:
+    
+    if client:
+        prompt = "Clasifica estrictamente en: 'rostro', 'texto' o 'paisaje'. Responde solo con una de esas tres palabras."
         try:
-            res = client.models.generate_content(model=m, contents=[pil_img, prompt])
+            res = client.models.generate_content(model="gemini-3.5-flash-lite", contents=[pil_img, prompt])
             texto = res.text.strip().lower()
-            for k in ["rostro", "texto", "paisaje"]:
-                if k in texto:
-                    cat = k
-                    break
-            break
+            if any(k in texto for k in ["rostro", "texto", "paisaje"]):
+                cat = next(k for k in ["rostro", "texto", "paisaje"] if k in texto)
         except Exception:
-            continue
-    latencia = time.perf_counter() - t0
-    return cat, latencia
-
-def restaurar_adaptativa(img_np: np.ndarray, categoria: str) -> np.ndarray:
-    h, w = img_np.shape[:2]
-    nueva_w, nueva_h = int(w * 2), int(h * 2)
-
-    if categoria == "texto":
-        escalada = cv2.resize(img_np, (nueva_w, nueva_h), interpolation=cv2.INTER_CUBIC)
-        denoised = cv2.bilateralFilter(escalada, d=9, sigmaColor=75, sigmaSpace=75)
-        gaussian = cv2.GaussianBlur(denoised, (0, 0), 2.0)
-        return cv2.addWeighted(denoised, 1.5, gaussian, -0.5, 0)
-
-    elif categoria == "rostro":
-        pre_limpia = cv2.bilateralFilter(img_np, d=5, sigmaColor=16, sigmaSpace=16)
-        escalada = cv2.resize(pre_limpia, (nueva_w, nueva_h), interpolation=cv2.INTER_CUBIC)
-        lab = cv2.cvtColor(escalada, cv2.COLOR_RGB2LAB)
-        l, a, b = cv2.split(lab)
-
-        a_clean = cv2.GaussianBlur(a, (7, 7), 2.0)
-        b_clean = cv2.GaussianBlur(b, (7, 7), 2.0)
-        l_base = cv2.bilateralFilter(l, d=7, sigmaColor=18, sigmaSpace=18).astype(np.float32)
-
-        gx = cv2.Sobel(l_base, cv2.CV_32F, 1, 0, ksize=3)
-        gy = cv2.Sobel(l_base, cv2.CV_32F, 0, 1, ksize=3)
-        grad_mag = cv2.magnitude(gx, gy)
-        mascara_contorno = np.clip((grad_mag - 28.0) / 38.0, 0.0, 1.0)
-        mascara_contorno = cv2.GaussianBlur(mascara_contorno, (5, 5), 1.2)
-
-        l_antialiasing = cv2.GaussianBlur(l_base, (3, 3), 0.85)
-        l_base_suave = l_base * (1.0 - mascara_contorno) + l_antialiasing * mascara_contorno
-
-        g_fina = cv2.GaussianBlur(l_base_suave, (0, 0), sigmaX=1.1)
-        g_media = cv2.GaussianBlur(l_base_suave, (0, 0), sigmaX=2.6)
-        det_fino = l_base_suave - g_fina
-        det_medio = g_fina - g_media
-
-        det_fino_c = np.sign(det_fino) * np.maximum(0.0, np.abs(det_fino) - 1.2)
-        det_medio_c = np.sign(det_medio) * np.maximum(0.0, np.abs(det_medio) - 1.6)
-
-        factor_proteccion = 1.0 - (0.75 * mascara_contorno)
-        detalle_total = (det_fino_c * 1.55 + det_medio_c * 1.25) * factor_proteccion
-        detalle_total = np.clip(detalle_total, -14.0, 14.0)
-
-        l_estructurada = np.clip(l_base_suave + detalle_total, 0.0, 255.0)
-        l_norm = l_estructurada / 255.0
-        l_curva = l_norm - 0.12 * (np.sin(2.0 * np.pi * l_norm) / (2.0 * np.pi))
-        l_final = np.clip(l_curva * 255.0, 0, 255).astype(np.uint8)
-
-        lab_final = cv2.merge((l_final, a_clean, b_clean))
-        return cv2.cvtColor(lab_final, cv2.COLOR_LAB2RGB)
-
-    else:
-        escalada = cv2.resize(img_np, (nueva_w, nueva_h), interpolation=cv2.INTER_LANCZOS4)
-        lab = cv2.cvtColor(escalada, cv2.COLOR_RGB2LAB)
-        l, a, b = cv2.split(lab)
-        clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))
-        l_clahe = clahe.apply(l)
-        lab_merge = cv2.merge((l_clahe, a, b))
-        return cv2.cvtColor(lab_merge, cv2.COLOR_LAB2RGB)
-
-def calcular_ssim_simple(img1_g: np.ndarray, img2_g: np.ndarray) -> float:
-    c1, c2 = (0.01 * 255) ** 2, (0.03 * 255) ** 2
-    i1, i2 = img1_g.astype(np.float64), img2_g.astype(np.float64)
-    m1 = cv2.GaussianBlur(i1, (11, 11), 1.5)
-    m2 = cv2.GaussianBlur(i2, (11, 11), 1.5)
-    s1 = cv2.GaussianBlur(i1 ** 2, (11, 11), 1.5) - m1 ** 2
-    s2 = cv2.GaussianBlur(i2 ** 2, (11, 11), 1.5) - m2 ** 2
-    s12 = cv2.GaussianBlur(i1 * i2, (11, 11), 1.5) - (m1 * m2)
-    ssim = ((2 * m1 * m2 + c1) * (2 * s12 + c2)) / ((m1 ** 2 + m2 ** 2 + c1) * (s1 + s2 + c2))
-    return float(np.mean(ssim))
-
-def auditar_alucinaciones(orig_rgb: np.ndarray, rest_rgb: np.ndarray) -> tuple[np.ndarray, dict]:
-    h_r, w_r = rest_rgb.shape[:2]
-    deg_g = cv2.cvtColor(orig_rgb, cv2.COLOR_RGB2GRAY)
-    res_g = cv2.cvtColor(rest_rgb, cv2.COLOR_RGB2GRAY)
-    deg_scaled = cv2.resize(deg_g, (w_r, h_r), interpolation=cv2.INTER_CUBIC)
-
-    g_deg = np.sqrt(cv2.Sobel(deg_scaled, cv2.CV_64F, 1, 0)**2 + cv2.Sobel(deg_scaled, cv2.CV_64F, 0, 1)**2)
-    g_res = np.sqrt(cv2.Sobel(res_g, cv2.CV_64F, 1, 0)**2 + cv2.Sobel(res_g, cv2.CV_64F, 0, 1)**2)
-
-    diff = np.abs(g_res - g_deg)
-    anomalias = np.where(diff > np.percentile(diff, 90), diff, 0)
-
-    anomalias_norm = cv2.normalize(anomalias, None, 0, 255, cv2.NORM_MINMAX).astype(np.uint8)
-    heatmap_rgb = cv2.cvtColor(cv2.applyColorMap(anomalias_norm, cv2.COLORMAP_JET), cv2.COLOR_BGR2RGB)
-    overlay = cv2.addWeighted(rest_rgb, 0.65, heatmap_rgb, 0.35, 0)
-
-    fid_score = max(0.0, min(1.0, 1.0 - ((np.mean(diff) / 255.0) * 2.0)))
-    hallucination_ratio = (np.count_nonzero(anomalias) / anomalias.size) * 100.0
-    ssim_val = calcular_ssim_simple(deg_scaled, res_g)
-
-    nit_orig = float(cv2.Laplacian(deg_g, cv2.CV_64F).var())
-    nit_rest = float(cv2.Laplacian(res_g, cv2.CV_64F).var())
-    delta_nitidez = ((nit_rest - nit_orig) / max(nit_orig, 1.0)) * 100.0
-
-    return overlay, {
-        "fidelity_score": round(fid_score, 4),
-        "hallucination_ratio": round(hallucination_ratio, 1),
-        "ssim": round(ssim_val, 4),
-        "delta_nitidez": round(delta_nitidez, 1),
-        "out_res": f"{w_r} x {h_r} px"
+            pass
+            
+    lat = time.perf_counter() - t0
+    
+    return {
+        "categoria": cat,
+        "latencia": lat,
+        "original_b64": img_to_base64(img_rgb)
     }
 
-def np_to_base64(img_np: np.ndarray) -> str:
-    pil = Image.fromarray(img_np)
-    buf = io.BytesIO()
-    pil.save(buf, format="PNG")
-    return "data:image/png;base64," + base64.b64encode(buf.getvalue()).decode("utf-8")
+# ==========================================
+# ENDPOINT 2: Procesamiento Matemático PDI
+# ==========================================
+@app.post("/api/process")
+async def process_image(req: ProcessRequest):
+    img_np = base64_to_img(req.image_b64)
+    
+    h, w = img_np.shape[:2]
+    nw, nh = int(w * 2), int(h * 2)
+    rest_np = img_np.copy()
+    
+    # --- MATEMÁTICA EXACTA PDI CON CONTROL DE INTENSIDAD ---
+    if req.categoria == "texto":
+        escalada = cv2.resize(img_np, (nw, nh), interpolation=cv2.INTER_CUBIC)
+        
+        if req.sub_modo == "Iluminación Irregular (Sauvola)":
+            c_val = int(req.intensidad) if req.intensidad else 10
+            gris = cv2.cvtColor(escalada, cv2.COLOR_RGB2GRAY)
+            binarizada = cv2.adaptiveThreshold(gris, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY, 21, c_val)
+            rest_np = cv2.cvtColor(binarizada, cv2.COLOR_GRAY2RGB)
+            
+        elif req.sub_modo == "Trazos Desgastados (Top-Hat)":
+            alpha_val = req.intensidad if req.intensidad else 2.5
+            gris = cv2.cvtColor(escalada, cv2.COLOR_RGB2GRAY)
+            kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (21, 21))
+            blackhat = cv2.morphologyEx(gris, cv2.MORPH_BLACKHAT, kernel)
+            blackhat_fuerte = cv2.convertScaleAbs(blackhat, alpha=alpha_val, beta=0)
+            resultado = cv2.subtract(gris, blackhat_fuerte)
+            resultado = cv2.normalize(resultado, None, 0, 255, cv2.NORM_MINMAX)
+            rest_np = cv2.cvtColor(resultado, cv2.COLOR_GRAY2RGB)
+            
+        elif req.sub_modo == "Eliminar Muaré de Pantalla (FFT 2D)":
+            radio = int(req.intensidad) if req.intensidad else 40
+            gris = cv2.cvtColor(escalada, cv2.COLOR_RGB2GRAY)
+            f = np.fft.fft2(gris)
+            fshift = np.fft.fftshift(f)
+            filas, cols = gris.shape
+            crow, ccol = filas // 2 , cols // 2
+            mascara = np.ones((filas, cols), np.uint8)
+            mascara[crow-3:crow+3, :] = 0 
+            mascara[:, ccol-3:ccol+3] = 0
+            mascara[crow-radio:crow+radio, ccol-radio:ccol+radio] = 1
+            fshift = fshift * mascara
+            f_ishift = np.fft.ifftshift(fshift)
+            img_back = np.abs(np.fft.ifft2(f_ishift))
+            img_back = cv2.normalize(img_back, None, 0, 255, cv2.NORM_MINMAX).astype(np.uint8)
+            _, binarizada = cv2.threshold(img_back, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+            rest_np = cv2.cvtColor(binarizada, cv2.COLOR_GRAY2RGB)
+            
+    elif req.categoria == "rostro":
+        ycbcr = cv2.cvtColor(img_np, cv2.COLOR_RGB2YCrCb)
+        y, cr, cb = cv2.split(ycbcr)
+        y_up = cv2.resize(y, (nw, nh), interpolation=cv2.INTER_CUBIC)
+        cr_up = cv2.resize(cr, (nw, nh), interpolation=cv2.INTER_CUBIC)
+        cb_up = cv2.resize(cb, (nw, nh), interpolation=cv2.INTER_CUBIC)
+        escalada = cv2.cvtColor(cv2.merge((y_up, cr_up, cb_up)), cv2.COLOR_YCrCb2RGB)
 
-@app.route("/")
-def index():
-    return send_from_directory("../frontend", "index.html")
+        if req.sub_modo == "Super-Resolución (Solo YCbCr)":
+            clip_val = req.intensidad if req.intensidad else 1.5
+            y_up_clahe = cv2.createCLAHE(clipLimit=clip_val, tileGridSize=(8, 8)).apply(y_up)
+            rest_np = cv2.cvtColor(cv2.merge((y_up_clahe, cr_up, cb_up)), cv2.COLOR_YCrCb2RGB)
+            
+        elif req.sub_modo == "Trepidación (Deconvolución / Sharpening)":
+            fuerza = req.intensidad if req.intensidad else 0.7
+            kernel_sharp = np.array([[-1,-1,-1], [-1,9,-1], [-1,-1,-1]])
+            resultado = cv2.filter2D(escalada, -1, kernel_sharp)
+            rest_np = cv2.addWeighted(escalada, 1.0 - fuerza, resultado, fuerza, 0)
+            
+        elif req.sub_modo == "Ruido ISO Alto (No-Local Means)":
+            h_val = req.intensidad if req.intensidad else 10.0
+            rest_np = cv2.fastNlMeansDenoisingColored(escalada, None, h_val, h_val, 7, 21)
+            
+        elif req.sub_modo == "Iluminación Nocturna (MSRCR / Retinex)":
+            alpha_val = req.intensidad if req.intensidad else 1.2
+            img_float = np.float32(escalada) + 1.0
+            retinex = np.zeros_like(img_float)
+            for sigma in [15, 80, 250]:
+                blur = cv2.GaussianBlur(img_float, (0, 0), sigma)
+                retinex += np.log10(img_float) - np.log10(blur)
+            retinex = (retinex / 3.0) * 255.0
+            resultado = cv2.normalize(retinex, None, 0, 255, cv2.NORM_MINMAX)
+            resultado = cv2.convertScaleAbs(resultado, alpha=alpha_val, beta=10)
+            rest_np = cv2.cvtColor(resultado, cv2.COLOR_BGR2RGB)
+            
+        elif req.sub_modo == "Suavizado de Piel (Filtro Guiado)":
+            sigma_s_val = int(req.intensidad) if req.intensidad else 60
+            rest_np = cv2.edgePreservingFilter(escalada, flags=cv2.RECURS_FILTER, sigma_s=sigma_s_val, sigma_r=0.2)
 
-@app.route("/api/process", methods=["POST"])
-def process():
-    if "image" not in request.files:
-        return jsonify({"error": "No se recibió ninguna imagen"}), 400
-
-    archivo = request.files["image"]
-    pil_raw = ImageOps.exif_transpose(Image.open(archivo.stream)).convert("RGB")
-    img_np = np.array(pil_raw)
-
-    t_inicio = time.perf_counter()
-    cat, lat_gemini = clasificar_semantica(pil_raw)
-    rest_np = restaurar_adaptativa(img_np, cat)
-    heat_np, metricas = auditar_alucinaciones(img_np, rest_np)
-    lat_total = time.perf_counter() - t_inicio
-
-    return jsonify({
-        "categoria": cat.upper(),
-        "latencia": round(lat_total, 2),
-        "metricas": metricas,
-        "img_original": np_to_base64(img_np),
-        "img_restaurada": np_to_base64(rest_np),
-        "img_heatmap": np_to_base64(heat_np)
-    })
+    # --- Auditoría de Gradientes y Métricas ---
+    h_r, w_r = rest_np.shape[:2]
+    deg_scaled = cv2.resize(cv2.cvtColor(img_np, cv2.COLOR_RGB2GRAY), (w_r, h_r), interpolation=cv2.INTER_CUBIC)
+    res_g = cv2.cvtColor(rest_np, cv2.COLOR_RGB2GRAY)
+    
+    g_deg = np.sqrt(cv2.Sobel(deg_scaled, cv2.CV_64F, 1, 0)**2 + cv2.Sobel(deg_scaled, cv2.CV_64F, 0, 1)**2)
+    g_res = np.sqrt(cv2.Sobel(res_g, cv2.CV_64F, 1, 0)**2 + cv2.Sobel(res_g, cv2.CV_64F, 0, 1)**2)
+    
+    diff = np.abs(g_res - g_deg)
+    anomalias = np.where(diff > np.percentile(diff, 90), diff, 0)
+    heatmap_rgb = cv2.cvtColor(cv2.applyColorMap(cv2.normalize(anomalias, None, 0, 255, cv2.NORM_MINMAX).astype(np.uint8), cv2.COLORMAP_JET), cv2.COLOR_BGR2RGB)
+    
+    n_orig = float(cv2.Laplacian(deg_scaled, cv2.CV_64F).var())
+    n_rest = float(cv2.Laplacian(res_g, cv2.CV_64F).var())
+    
+    return {
+        "restaurada_b64": img_to_base64(rest_np),
+        "heatmap_b64": img_to_base64(cv2.addWeighted(rest_np, 0.65, heatmap_rgb, 0.35, 0)),
+        "metricas": {
+            "fid": round(max(0.0, min(1.0, 1.0 - ((np.mean(diff) / 255.0) * 2.0))), 3),
+            "hal": round((np.count_nonzero(anomalias) / anomalias.size) * 100.0, 1),
+            "delta": round(((n_rest - n_orig) / max(n_orig, 1.0)) * 100.0, 1),
+            "res": f"{w_r} x {h_r} px"
+        }
+    }
 
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=5000, debug=True)
+    import uvicorn
+    uvicorn.run(app, host="0.0.0.0", port=8000)

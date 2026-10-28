@@ -3,12 +3,12 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>VisionRestore AI - Auditoría & Super-Resolución</title>
-  <!-- Enlace a la hoja de estilos -->
-  <link rel="stylesheet" href="css/style.css?v=3">
+  <title>VisionRestore AI - Tesis</title>
+  <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
   <div class="app-container">
+    
     <!-- Telemetría Superior -->
     <header class="telemetry-bar">
       <div class="metric-card">
@@ -18,12 +18,12 @@
       </div>
       <div class="metric-card">
         <span class="metric-label">⏱️ Tiempo de Inferencia</span>
-        <span class="metric-value text-green" id="val-latencia">0.00s</span>
+        <span class="metric-value text-green" id="val-latencia">0.0s</span>
         <span class="metric-sub">Latencia de ejecución</span>
       </div>
       <div class="metric-card">
         <span class="metric-label">🛡️ Fidelity Score</span>
-        <span class="metric-value text-sky" id="val-fidelity">0.000</span>
+        <span class="metric-value text-sky" id="val-fidelity">0.00</span>
         <span class="metric-sub">Confiabilidad estructural [0-1]</span>
       </div>
       <div class="metric-card">
@@ -33,95 +33,151 @@
       </div>
     </header>
 
-    <!-- Layout Principal: 3 Columnas -->
     <main class="main-layout">
-      <!-- Columna 1: Ingesta y Controles -->
+      <!-- PANEL IZQUIERDO: Controles -->
       <aside class="panel-controls">
         <h3>🕹️ Ingesta y Control</h3>
-        
-        <!-- Título superior del uploader -->
         <div class="uploader-title">Seleccionar imagen a restaurar</div>
-
-        <!-- Tarjeta estilo Streamlit Uploader con Drag & Drop nativo -->
-        <label for="file-input" class="streamlit-uploader" id="drop-zone">
-          <input type="file" id="file-input" accept="image/png, image/jpeg, image/jpg, image/webp" style="display: none !important;">
-          <div class="uploader-btn">
-            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
-              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
-              <polyline points="17 8 12 3 7 8"/>
-              <line x1="12" y1="3" x2="12" y2="15"/>
-            </svg>
-            <span>Upload</span>
-          </div>
-          <span class="uploader-info">200MB per file • JPG, PNG, WEBP</span>
+        
+        <label for="image-upload" class="streamlit-uploader" id="drop-zone">
+          <input type="file" id="image-upload" accept="image/png, image/jpeg, image/jpg, image/webp" style="display: none;">
+          <div class="uploader-btn"><span>Upload</span></div>
+          <span class="uploader-info" id="file-name-display">JPG, PNG, WEBP</span>
         </label>
+        
+        <button id="btn-analizar" class="btn-primary" style="margin-top: 15px;">⚡ Analizar Fotografía</button>
+        <p id="estado" style="color:#fbbf24; font-size:12px; margin-top:10px;"></p>
 
-        <!-- Información de archivo subido -->
-        <div id="file-info" class="file-info hidden">
-          <p id="info-name">📄 <b>Archivo:</b> -</p>
-          <p id="info-res">📐 <b>Resolución:</b> -</p>
+        <!-- MENU DOCUMENTOS -->
+        <div id="menu-texto" class="hidden">
+            <h4 style="color:#60a5fa; margin-top:20px;">📄 Herramientas de Documento</h4>
+            
+            <div class="side-card">
+                <label>
+                    <input type="radio" name="tool" value="Iluminación Irregular (Sauvola)"> 💡 Aclarar Fondo (Sauvola)
+                </label>
+                <div class="slider-box hidden">
+                    <p class="slider-label">Intensidad de limpieza</p>
+                    <input type="range" id="slider-sauvola" min="1" max="30" value="10">
+                </div>
+            </div>
+
+            <div class="side-card">
+                <label>
+                    <input type="radio" name="tool" value="Trazos Desgastados (Top-Hat)"> ✍️ Trazos (Top-Hat)
+                </label>
+                <div class="slider-box hidden">
+                    <p class="slider-label">Grosor de la tinta</p>
+                    <input type="range" id="slider-tophat" min="1" max="5" value="2.5" step="0.1">
+                </div>
+            </div>
+
+            <div class="side-card">
+                <label>
+                    <input type="radio" name="tool" value="Eliminar Muaré de Pantalla (FFT 2D)"> 📺 Quitar Rayas (FFT)
+                </label>
+                <div class="slider-box hidden">
+                    <p class="slider-label">Protección de luz base</p>
+                    <input type="range" id="slider-fft" min="10" max="100" value="40">
+                </div>
+            </div>
         </div>
 
-        <button id="btn-process" class="btn-primary" disabled>
-          ⚡ Ejecutar Restauración + Auditoría
-        </button>
+        <!-- MENU ROSTROS -->
+        <div id="menu-rostro" class="hidden">
+            <h4 style="color:#f472b6; margin-top:20px;">👤 Herramientas de Retrato</h4>
+            
+            <div class="side-card">
+                <label>
+                    <input type="radio" name="tool" value="Super-Resolución (Solo YCbCr)"> 🔍 Mejorar Definición (HD)
+                </label>
+                <div class="slider-box hidden">
+                    <p class="slider-label">Nivel de contraste</p>
+                    <input type="range" id="slider-sr" min="1" max="5" value="1.5" step="0.1">
+                </div>
+            </div>
+
+            <div class="side-card">
+                <label>
+                    <input type="radio" name="tool" value="Trepidación (Deconvolución / Sharpening)"> 📳 Arreglar Foto Movida
+                </label>
+                <div class="slider-box hidden">
+                    <p class="slider-label">Fuerza del enfoque</p>
+                    <input type="range" id="slider-trep" min="0.1" max="1.0" value="0.7" step="0.05">
+                </div>
+            </div>
+
+            <div class="side-card">
+                <label>
+                    <input type="radio" name="tool" value="Ruido ISO Alto (No-Local Means)"> 🌌 Limpiar Lluvia o Grano
+                </label>
+                <div class="slider-box hidden">
+                    <p class="slider-label">Limpieza de grano</p>
+                    <input type="range" id="slider-iso" min="1" max="30" value="10">
+                </div>
+            </div>
+
+            <div class="side-card">
+                <label>
+                    <input type="radio" name="tool" value="Iluminación Nocturna (MSRCR / Retinex)"> 💡 Iluminar Foto Oscura
+                </label>
+                <div class="slider-box hidden">
+                    <p class="slider-label">Fuerza de iluminación</p>
+                    <input type="range" id="slider-noc" min="0.5" max="3.0" value="1.2" step="0.1">
+                </div>
+            </div>
+
+            <div class="side-card">
+                <label>
+                    <input type="radio" name="tool" value="Suavizado de Piel (Filtro Guiado)"> ✨ Suavizado Mágico Piel
+                </label>
+                <div class="slider-box hidden">
+                    <p class="slider-label">Nivel mágico</p>
+                    <input type="range" id="slider-piel" min="10" max="120" value="60">
+                </div>
+            </div>
+        </div>
+
+        <!-- Botón Fizzy de Descarga -->
+        <div id="download-wrap" class="fizzy-wrap hidden">
+           <input type="checkbox" id="fizzy-cb">
+           <label for="fizzy-cb" class="fizzy-label">
+               <a id="btn-download" href="#" download="restaurada.png" class="download-cover">
+                   <span class="txt">📥 Descargar Imagen</span>
+               </a>
+               <span class="tick">✓</span>
+               <div class="particles" id="particles-box"></div>
+           </label>
+        </div>
 
         <div class="section-title">📊 Características del Procesamiento</div>
-
-        <div class="side-card">
-          <span class="side-title">SSIM Estructural</span>
-          <span class="side-val text-green" id="side-ssim">-</span>
-        </div>
-        <div class="side-card">
-          <span class="side-title">Ganancia de Nitidez (Δ)</span>
-          <span class="side-val text-purple" id="side-nitidez">-</span>
-        </div>
-        <div class="side-card">
-          <span class="side-title">Resolución de Salida (2x)</span>
-          <span class="side-val text-white" id="side-res">-</span>
-        </div>
-
-        <a id="btn-download" class="btn-secondary hidden" download="imagen_restaurada.png">
-          📥 Descargar Imagen Restaurada
-        </a>
+        <div class="side-card"><span class="side-title">Ganancia de Nitidez (Δ)</span><span class="side-val text-purple" id="lbl-delta">+0.0%</span></div>
+        <div class="side-card"><span class="side-title">Resolución de Salida (2x)</span><span class="side-val text-white" id="lbl-res">-</span></div>
       </aside>
 
-      <!-- Columna 2: Comparador Deslizante Antes / Después -->
+      <!-- PANALES CENTRALES: Comparador y Heatmap -->
       <section class="viewer-panel">
         <h4>🖼️ Comparativa: Original vs Restaurada</h4>
-        <div class="viewer-box comparison-container" id="slider-container">
-          <div class="empty-state" id="empty-state-comp">
-            <span>🖼️</span>
-            <p>Aquí aparecerá la cortina interactiva entre la imagen original y la restaurada.</p>
-          </div>
-          
-          <img id="img-after" class="comp-img comp-after hidden" alt="Restaurada">
+        <div class="viewer-box comparison-container">
+          <div class="empty-state" id="empty-comp"><span>🖼️</span><p>Esperando imagen...</p></div>
+          <img id="img-restaurada" class="comp-img comp-after hidden">
           <div class="comp-before-wrapper hidden" id="before-wrapper">
-            <img id="img-before" class="comp-img comp-before" alt="Original">
+            <img id="img-original" class="comp-img comp-before">
           </div>
-          <input type="range" min="0" max="100" value="50" class="slider" id="comp-range">
-          <div class="slider-divider hidden" id="slider-line"></div>
+          <input type="range" min="0" max="100" value="50" class="slider hidden" id="comp-range">
         </div>
       </section>
 
-      <!-- Columna 3: Mapa de Calor de Gradientes -->
       <section class="viewer-panel">
         <h4>🔬 Auditoría de Gradientes (Mapa JET)</h4>
-        <div class="viewer-box" id="heatmap-container">
-          <div class="empty-state" id="empty-state-heat">
-            <span>🔬</span>
-            <p>Aquí se proyectará el mapa de calor con los gradientes residuales de Sobel.</p>
-          </div>
-          <img id="img-heatmap" class="heatmap-img hidden" alt="Heatmap JET">
-          <p id="heat-caption" class="caption hidden">
-            Residuos de Sobolev: Rojo/Amarillo = Modificaciones | Azul = Fidelidad Pura
-          </p>
+        <div class="viewer-box">
+          <div class="empty-state" id="empty-heat"><span>🔬</span><p>Esperando auditoría...</p></div>
+          <img id="img-heatmap" class="heatmap-img hidden">
         </div>
       </section>
+
     </main>
   </div>
-
-  <!-- Enlace al script JS -->
-  <script src="js/app.js?v=3"></script>
+  <script src="js/app.js"></script>
 </body>
 </html>
