@@ -1,8 +1,8 @@
-🖼️ VisionRestore AI - Plataforma de Restauración PDI
+🖼️ VisionRestore AI - Plataforma de Restauración 
 
 VisionRestore AI es una aplicación web interactiva y 100% offline diseñada para la restauración matemática de imágenes digitales (documentos y retratos).
 
-Fue desarrollada como proyecto de tesis para la Tecnicatura Superior en Ciencia de Datos e Inteligencia Artificial. Su mayor innovación es que no requiere internet ni tarjetas gráficas costosas (GPU). Utiliza Procesamiento Digital de Imágenes (PDI) clásico optimizado, lo que permite que funcione con fluidez incluso en notebooks de bajos recursos (ej. procesadores Celeron con 8GB de RAM).
+Fue desarrollada como proyecto para la Tecnicatura Superior en Ciencia de Datos e Inteligencia Artificial. Su mayor innovación es que no requiere internet ni tarjetas gráficas (GPU). Utiliza Procesamiento Digital de Imágenes (PDI) clásico optimizado, lo que permite que funcione con fluidez incluso en notebooks de bajos recursos.
 
 🚀 Características Principales
 
@@ -40,13 +40,14 @@ restaurador-imagenes-ia/
 │   ├── tools/                  # (Fines Académicos) Herramientas modulares extra
 │   └── pipeline/               # (Fines Académicos) Tuberías de automatización
 │
-└── README.md                   # Este manual de instrucciones
+├── README.md                   # Este manual de instrucciones
+└── Manual_README.html          # Manual web para su uso
 
 
 🔍 ¿Por qué hay carpetas que no se usan directamente en el programa?
 
 Notarás que dentro de backend/ hay carpetas como experiments/, tests/, tools/ y pipeline/ que no son llamadas por la aplicación principal al restaurar una foto.
-Estas carpetas se mantienen por el rigor académico de la tesis:
+Estas carpetas se mantienen para poder expandir las herramientas en un futuro:
 
 experiments/: Contiene los scripts de validación (benchmarks) donde se comprobó qué fórmulas matemáticas eran más rápidas o eficientes.
 
@@ -81,6 +82,9 @@ python -m venv venv
 # Activar la burbuja (En Windows)
 .\venv\Scripts\activate
 
+# Activar la burbuja (En Linux)
+source venv/bin/activate
+
 # Instalar los motores matemáticos (OpenCV, FastAPI, etc.)
 pip install -r requirements.txt
 
@@ -98,9 +102,15 @@ Verás un mensaje que dice Uvicorn running on http://127.0.0.1:8000. ¡No cierre
 
 Paso 3: Abrir la Aplicación Visual
 
-Ve a la carpeta frontend/ en tu computadora (usando el Explorador de Archivos de Windows normal).
+Abre una segunda terminal y entra en el frontend
 
-Haz doble clic en el archivo index.html.
+cd frontend
+
+Ejecuta el siguiente comando
+
+python -m http.server 3000
+
+Ingresa el siguiente link http://localhost:3000 en el navegador
 
 ¡Listo! Se abrirá en tu navegador web (Chrome, Edge, etc.) y podrás empezar a usarla.
 

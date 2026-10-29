@@ -38,7 +38,7 @@
 
         header {
             text-align: center;
-            margin-bottom: 50px;
+            margin-bottom: 40px;
             padding-bottom: 30px;
             border-bottom: 1px solid var(--border-color);
         }
@@ -164,30 +164,35 @@
         <header>
             <h1>🖼️ VisionRestore AI</h1>
             <p class="intro">
-                <strong>Plataforma de Restauración PDI</strong><br><br>
-                Aplicación web interactiva y 100% offline diseñada para la restauración matemática de imágenes digitales (documentos y retratos). 
-                Desarrollada como proyecto de tesis para la <strong>Tecnicatura Superior en Ciencia de Datos e Inteligencia Artificial</strong>. 
-                Su mayor innovación es que no requiere internet ni tarjetas gráficas costosas, funcionando con fluidez en notebooks de bajos recursos.
+                <strong>Plataforma de Restauración</strong><br><br>
+                Aplicación web interactiva y 100% offline diseñada para la restauración matemática de imágenes digitales (documentos y retratos).
             </p>
         </header>
+
+        <section>
+            <div class="info-box">
+                <strong>💡 Acerca del Proyecto</strong>
+                <p style="margin-top: 10px;">Fue desarrollada como proyecto para la Tecnicatura Superior en Ciencia de Datos e Inteligencia Artificial. Su mayor innovación es que no requiere internet ni tarjetas gráficas (GPU). Utiliza Procesamiento Digital de Imágenes (PDI) clásico optimizado, lo que permite que funcione con fluidez incluso en notebooks de bajos recursos.</p>
+            </div>
+        </section>
 
         <section>
             <h2>🚀 Características Principales</h2>
             <div class="features-grid">
                 <div class="feature-card">
-                    <strong>100% Privado y Local</strong>
+                    <strong>🔒 100% Privado y Local</strong>
                     <p>Las fotos nunca salen de tu computadora. No se usan APIs externas ni servicios en la nube.</p>
                 </div>
                 <div class="feature-card">
-                    <strong>Optimización Extrema</strong>
-                    <p>Comprime las imágenes a WebP y reduce su tamaño para vistas previas instantáneas, aplicando la calidad máxima solo al descargar.</p>
+                    <strong>⚡ Optimización Extrema</strong>
+                    <p>Comprime las imágenes internamente a formato WebP y reduce su tamaño para vistas previas instantáneas, aplicando la calidad original solo al momento de descargar.</p>
                 </div>
                 <div class="feature-card">
-                    <strong>Auditoría de Alucinaciones</strong>
-                    <p>Cuenta con un "Mapa JET" que compara los gradientes matemáticos, demostrando que la aplicación no inventa detalles (uso forense).</p>
+                    <strong>🔬 Auditoría de Alucinaciones</strong>
+                    <p>Cuenta con un "Mapa JET" que compara los gradientes matemáticos, demostrando que la aplicación no inventa ni alucina detalles (crítico para uso forense o documental).</p>
                 </div>
                 <div class="feature-card">
-                    <strong>Modo Acumulativo</strong>
+                    <strong>🔗 Modo Acumulativo</strong>
                     <p>Permite encadenar múltiples filtros (ej. iluminar + remarcar texto + quitar ruido) de forma visual.</p>
                 </div>
             </div>
@@ -195,82 +200,104 @@
 
         <section>
             <h2>📁 Estructura del Proyecto</h2>
-            <p>El proyecto sigue una estricta <strong>Arquitectura Limpia (Clean Architecture)</strong>, separando la interfaz visual del motor matemático.</p>
+            <p>El proyecto sigue una estricta <strong>Arquitectura Limpia (Clean Architecture)</strong>, separando la interfaz visual (Frontend) del motor matemático (Backend).</p>
             
             <pre><code class="tree-code">restaurador-imagenes-ia/
-├── frontend/                   # Interfaz visual de usuario
+├── frontend/                   # Interfaz visual de usuario (Lo que ves en el navegador)
 │   ├── index.html              # Estructura de la página web
 │   ├── style.css               # Diseño, colores y animaciones
-│   └── app.js                  # Lógica interactiva
+│   └── app.js                  # Lógica interactiva y conexión con el motor
 │
-├── backend/                    # Motor principal y servidor
-│   ├── requirements.txt        # Librerías necesarias
-│   ├── app/                    
-│   │   ├── main.py             # Archivo que enciende el servidor
-│   │   ├── schemas.py          # Reglas de viaje de datos
-│   │   └── routers/process.py  # Enrutador REST
+├── backend/                    # Motor principal y servidor (El "cerebro" oculto)
+│   ├── requirements.txt        # Lista de librerías necesarias para funcionar
+│   ├── app/                    # El servidor web
+│   │   ├── main.py             # Archivo que enciende el servidor (FastAPI)
+│   │   ├── schemas.py          # Reglas de cómo viajan los datos
+│   │   └── routers/process.py  # Enrutador que recibe las órdenes del frontend
 │   │
-│   ├── vision/                 # Núcleo de Matemática
-│   │   ├── imageio.py          # Conversión de imágenes
-│   │   └── filters.py          # Fórmulas de OpenCV
+│   ├── vision/                 # Núcleo de Matemática y Procesamiento
+│   │   ├── imageio.py          # Lee y convierte imágenes a matrices de datos
+│   │   └── filters.py          # Fórmulas de OpenCV (Sauvola, Retinex, CLAHE, etc.)
 │   │
-│   ├── experiments/            # Registros del método científico
-│   ├── tests/                  # Pruebas automatizadas (pytest)
-│   ├── tools/                  # Herramientas modulares extra
-│   └── pipeline/               # Tuberías de automatización
+│   ├── experiments/            # (Fines Académicos) Registros del método científico
+│   ├── tests/                  # (Fines Académicos) Pruebas automatizadas de calidad
+│   ├── tools/                  # (Fines Académicos) Herramientas modulares extra
+│   └── pipeline/               # (Fines Académicos) Tuberías de automatización
 │
-└── README.md                   # Este manual</code></pre>
+├── README.md                   # Este manual de instrucciones
+└── Manual_README.html          # Manual web para su uso</code></pre>
 
-            <div class="info-box">
-                <strong>🔍 ¿Por qué hay carpetas que no se usan directamente?</strong>
-                <p style="margin-top: 10px;">Carpetas como <code class="inline">experiments/</code>, <code class="inline">tests/</code>, y <code class="inline">tools/</code> no son llamadas por la UI, pero se mantienen por el <strong>rigor académico de la tesis</strong>. Demuestran la validación de las fórmulas, pruebas de calidad de código y dejan la arquitectura lista para futuras expansiones.</p>
-            </div>
+            <h3 style="color: var(--accent-purple); margin-top: 35px;">🔍 ¿Por qué hay carpetas que no se usan directamente en el programa?</h3>
+            <p>Notarás que dentro de <code class="inline">backend/</code> hay carpetas como <code class="inline">experiments/</code>, <code class="inline">tests/</code>, <code class="inline">tools/</code> y <code class="inline">pipeline/</code> que no son llamadas por la aplicación principal al restaurar una foto.</p>
+            <p>Estas carpetas se mantienen para poder expandir las herramientas en un futuro:</p>
+            <ul style="margin-top: 15px;">
+                <li><strong>experiments/</strong>: Contiene los scripts de validación (benchmarks) donde se comprobó qué fórmulas matemáticas eran más rápidas o eficientes.</li>
+                <li><strong>tests/</strong>: Contiene pruebas de código (pytest). Sirve para que los programadores comprueben que las fórmulas no fallan al hacer modificaciones.</li>
+                <li><strong>tools/ y pipeline/</strong>: Son carpetas de "arquitectura expansible". Si en el futuro el proyecto crece y se vuelve automático en lugar de manual, el código se organizaría aquí usando Programación Orientada a Objetos. Mantenerlas demuestra madurez en la Ingeniería de Software.</li>
+            </ul>
         </section>
 
         <section>
             <h2>💻 Guía de Instalación (Para principiantes)</h2>
-            <p>Sigue estos pasos para usar el programa en Windows, incluso si no sabes programar.</p>
+            <p>Sigue estos pasos al pie de la letra para usar el programa en tu computadora con Windows, incluso si no sabes programar.</p>
 
             <h3>Requisitos Previos</h3>
-            <ol>
-                <li>Descarga e instala <strong>Python</strong> (marca la casilla "Add Python to PATH" durante la instalación).</li>
-                <li>Descarga un editor de texto como <strong>Visual Studio Code (VS Code)</strong>.</li>
-            </ol>
+            <ul>
+                <li>Descarga e instala <strong>Python</strong> desde la página oficial (marca la casilla <em>"Add Python to PATH"</em> durante la instalación).</li>
+                <li>Opcional pero recomendado: Descarga un editor de texto como <strong>Visual Studio Code (VS Code)</strong>.</li>
+            </ul>
 
             <h3>Paso 1: Preparar el Motor (Backend)</h3>
-            <p>Abre la terminal en VS Code y ejecuta estos comandos uno por uno:</p>
-            <pre><code class="bash-code"># 1. Entrar a la carpeta del motor
+            <p>Abre tu carpeta <code class="inline">restaurador-imagenes-ia</code> en Visual Studio Code (o abre una terminal en esa carpeta).</p>
+            <p>Ve a la barra superior, haz clic en <strong>Terminal -> New Terminal</strong>. Escribe los siguientes comandos uno por uno y presiona Enter después de cada uno:</p>
+            
+            <pre><code class="bash-code"># Entrar a la carpeta del motor
 cd backend
 
-# 2. Crear un entorno virtual seguro
+# Crear un "entorno virtual" (una burbuja segura para instalar cosas)
 python -m venv venv
 
-# 3. Activar el entorno (En Windows)
+# Activar la burbuja (En Windows)
 .\venv\Scripts\activate
 
-# 4. Instalar los motores matemáticos
+# Activar la burbuja (En Linux)
+source venv/bin/activate
+
+# Instalar los motores matemáticos (OpenCV, FastAPI, etc.)
 pip install -r requirements.txt</code></pre>
+            <p><em>(Nota: Solo debes hacer este Paso 1 la primera vez que instalas el programa).</em></p>
 
             <h3>Paso 2: Encender el Servidor</h3>
-            <p>Cada vez que quieras usar la aplicación, debes encender el motor en tu terminal (con el <code class="inline">(venv)</code> activado):</p>
+            <p>Cada vez que quieras usar la aplicación, debes encender el motor. En la misma terminal (con el <code class="inline">(venv)</code> verde activado), escribe:</p>
+            
             <pre><code class="bash-code">uvicorn app.main:app --reload</code></pre>
-            <p>Verás un mensaje que dice <code class="inline">Uvicorn running on http://127.0.0.1:8000</code>. <strong>¡No cierres esta ventana negra!</strong></p>
+            
+            <p>Verás un mensaje que dice <code class="inline">Uvicorn running on http://127.0.0.1:8000</code>. <strong>¡No cierres esta ventana negra!</strong> Déjala minimizada; es el cerebro trabajando.</p>
 
             <h3>Paso 3: Abrir la Aplicación Visual</h3>
-            <p>Ve a la carpeta <code class="inline">frontend/</code> en el Explorador de Archivos y haz <strong>doble clic</strong> en el archivo <code class="inline">index.html</code>. Se abrirá en tu navegador listo para usarse.</p>
+            <p>Abre una <strong>segunda terminal</strong> (sin cerrar la terminal del backend) y entra en la carpeta del frontend:</p>
+            
+            <pre><code class="bash-code">cd frontend</code></pre>
+            
+            <p>Ejecuta el siguiente comando para iniciar el servidor de la interfaz visual:</p>
+            
+            <pre><code class="bash-code">python -m http.server 3000</code></pre>
+            
+            <p>Ingresa el siguiente link en tu navegador: <a href="http://localhost:3000" style="color: var(--accent-blue); font-weight: bold; text-decoration: none;">http://localhost:3000</a></p>
+            
+            <p>¡Listo! Se abrirá en tu navegador web (Chrome, Edge, etc.) y podrás empezar a usarla libremente.</p>
         </section>
 
         <section>
             <h2>🎨 ¿Cómo usar la aplicación?</h2>
             <ol>
                 <li><strong>Subir Foto:</strong> Arrastra una imagen o haz clic en "Upload".</li>
-                <li><strong>Seleccionar Categoría:</strong> Haz clic en <strong>📄 Documento</strong> o <strong>👤 Retrato</strong> para desplegar las herramientas correctas.</li>
-                <li><strong>Aplicar Filtros:</strong> Enciende los interruptores. El programa procesará una versión rápida al instante. Usa el deslizador central para comparar.</li>
-                <li><strong>Auditar (Opcional):</strong> Para comprobar científicamente los cambios, haz clic en "Auditar Gradientes".</li>
+                <li><strong>Seleccionar Categoría:</strong> Haz clic en 📄 <strong>Documento</strong> (si es un ticket, libro o apunte) o en 👤 <strong>Retrato</strong> (si es una foto de personas o paisajes). Esto desplegará las herramientas correctas.</li>
+                <li><strong>Aplicar Filtros:</strong> Enciende los interruptores de la izquierda. El programa procesará una versión rápida para que veas el resultado al instante sin trabar tu PC. Puedes usar la barra deslizante central para comparar el "Antes y Después".</li>
+                <li><strong>Auditar (Opcional):</strong> Si quieres comprobar científicamente los cambios, haz clic en "Auditar Gradientes".</li>
                 <li><strong>Descargar:</strong> Haz clic en el botón de descarga para guardar tu foto restaurada en alta resolución.</li>
             </ol>
         </section>
-
     </div>
 </body>
 </html>
