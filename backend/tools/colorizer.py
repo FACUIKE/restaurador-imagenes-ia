@@ -2,7 +2,7 @@ import logging
 import shutil
 from pathlib import Path
 from tools.base_tool import BaseRestorationTool
-from config import settings
+from backend.config import settings
 
 logger = logging.getLogger(__name__)
 

@@ -4,8 +4,8 @@ import shutil
 from pathlib import Path
 from typing import Dict, Any, List
 
-from agent.schemas import RestorationDecision
-from config import settings
+from backend.agent.schemas import RestorationDecision
+from backend.config import settings
 from tools import (
     DenoiseTool, 
     SuperResolutionTool, 

@@ -2,7 +2,7 @@ from pathlib import Path
 import cv2
 import torch
 from tools.base_tool import BaseRestorationTool
-from config import settings
+from backend.config import settings
 
 class SuperResolutionTool(BaseRestorationTool):
     """

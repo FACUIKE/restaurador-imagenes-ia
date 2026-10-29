@@ -5,8 +5,8 @@ from typing import Union
 from PIL import Image
 import ollama
 
-from config import settings
-from config.prompts import SYSTEM_PROMPT_RESTORATION, USER_PROMPT_ANALYZE
+from backend.config import settings
+from backend.config.prompts import SYSTEM_PROMPT_RESTORATION, USER_PROMPT_ANALYZE
 from agent.schemas import RestorationDecision
 
 logger = logging.getLogger(__name__)

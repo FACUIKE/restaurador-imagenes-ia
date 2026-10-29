@@ -1,7 +1,7 @@
 import cv2
 from pathlib import Path
 from tools.base_tool import BaseRestorationTool
-from config import settings
+from backend.config import settings
 
 class DenoiseTool(BaseRestorationTool):
     """

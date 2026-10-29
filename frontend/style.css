@@ -480,3 +480,24 @@ input[type="range"] {
 .tick { position: absolute; opacity: 0; font-size: 24px; color: #34d399; transform: scale(0); transition: all 0.3s ease; z-index: 1; }
 .fizzy-wrap input:checked ~ .fizzy-label .tick { opacity: 1; transform: scale(1) rotate(360deg); transition-delay: 0.2s; }
 .spots { position: absolute; width: 6px; height: 6px; border-radius: 50%; background: #3b82f6; opacity: 0; left: 50%; top: 50%; margin-left: -3px; margin-top: -3px; pointer-events: none; z-index: 0; }
+
+/* Botones de Selección de Categoría */
+.btn-category {
+    flex: 1;
+    background-color: #1e293b;
+    color: #94a3b8;
+    border: 1px solid #334155;
+    border-radius: 8px;
+    padding: 10px;
+    font-weight: 600;
+    font-size: 0.85rem;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+.btn-category:hover { background-color: #2a3b52; color: #e2e8f0; }
+.btn-category.active-cat {
+    background-color: #3b82f6;
+    color: #ffffff;
+    border-color: #3b82f6;
+    box-shadow: 0 4px 10px rgba(59, 130, 246, 0.3);
+}

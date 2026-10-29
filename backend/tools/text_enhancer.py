@@ -4,7 +4,7 @@ import cv2
 import numpy as np
 import torch
 from tools.base_tool import BaseRestorationTool
-from config import settings
+from backend.config import settings
 
 # Parche de compatibilidad torchvision / basicsr
 try:
