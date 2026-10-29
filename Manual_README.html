@@ -1,0 +1,276 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Manual VisionRestore AI</title>
+    <style>
+        :root {
+            --bg-main: #0b0f19;
+            --bg-card: #111827;
+            --bg-code: #0f172a;
+            --text-main: #e2e8f0;
+            --text-muted: #94a3b8;
+            --accent-blue: #38bdf8;
+            --accent-purple: #a855f7;
+            --accent-green: #34d399;
+            --border-color: #1f2937;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+        }
+
+        body {
+            background-color: var(--bg-main);
+            color: var(--text-main);
+            line-height: 1.6;
+            padding: 40px 20px;
+        }
+
+        .container {
+            max-width: 900px;
+            margin: 0 auto;
+        }
+
+        header {
+            text-align: center;
+            margin-bottom: 50px;
+            padding-bottom: 30px;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        h1 {
+            font-size: 2.5rem;
+            background: linear-gradient(135deg, var(--accent-blue) 0%, var(--accent-purple) 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            margin-bottom: 15px;
+        }
+
+        .intro {
+            font-size: 1.1rem;
+            color: var(--text-muted);
+            max-width: 700px;
+            margin: 0 auto;
+        }
+
+        h2 {
+            color: var(--text-main);
+            font-size: 1.8rem;
+            margin: 40px 0 20px 0;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        h3 {
+            color: var(--accent-blue);
+            font-size: 1.3rem;
+            margin: 25px 0 15px 0;
+        }
+
+        /* Tarjetas de Características */
+        .features-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
+            gap: 20px;
+            margin-bottom: 40px;
+        }
+
+        .feature-card {
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            padding: 20px;
+            transition: transform 0.2s ease, border-color 0.2s ease;
+        }
+
+        .feature-card:hover {
+            transform: translateY(-5px);
+            border-color: var(--accent-blue);
+        }
+
+        .feature-card strong {
+            display: block;
+            color: var(--accent-blue);
+            margin-bottom: 8px;
+            font-size: 1.1rem;
+        }
+
+        /* Bloques de Código */
+        pre {
+            background: var(--bg-code);
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            padding: 20px;
+            overflow-x: auto;
+            margin: 20px 0;
+            box-shadow: inset 0 2px 4px rgba(0,0,0,0.2);
+        }
+
+        code {
+            font-family: 'Courier New', Courier, monospace;
+            font-size: 0.9rem;
+        }
+
+        .tree-code {
+            color: var(--text-muted);
+        }
+
+        .bash-code {
+            color: var(--accent-green);
+        }
+
+        code.inline {
+            background: #1e293b;
+            padding: 3px 6px;
+            border-radius: 6px;
+            font-size: 0.9em;
+            color: #f8fafc;
+        }
+
+        /* Listas y Pasos */
+        ol, ul {
+            padding-left: 25px;
+            margin-bottom: 20px;
+            color: var(--text-muted);
+        }
+
+        li {
+            margin-bottom: 10px;
+        }
+
+        strong {
+            color: var(--text-main);
+        }
+
+        /* Alertas / Info Box */
+        .info-box {
+            background: rgba(56, 189, 248, 0.1);
+            border-left: 4px solid var(--accent-blue);
+            padding: 15px 20px;
+            border-radius: 0 8px 8px 0;
+            margin: 20px 0;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        
+        <header>
+            <h1>🖼️ VisionRestore AI</h1>
+            <p class="intro">
+                <strong>Plataforma de Restauración PDI</strong><br><br>
+                Aplicación web interactiva y 100% offline diseñada para la restauración matemática de imágenes digitales (documentos y retratos). 
+                Desarrollada como proyecto de tesis para la <strong>Tecnicatura Superior en Ciencia de Datos e Inteligencia Artificial</strong>. 
+                Su mayor innovación es que no requiere internet ni tarjetas gráficas costosas, funcionando con fluidez en notebooks de bajos recursos.
+            </p>
+        </header>
+
+        <section>
+            <h2>🚀 Características Principales</h2>
+            <div class="features-grid">
+                <div class="feature-card">
+                    <strong>100% Privado y Local</strong>
+                    <p>Las fotos nunca salen de tu computadora. No se usan APIs externas ni servicios en la nube.</p>
+                </div>
+                <div class="feature-card">
+                    <strong>Optimización Extrema</strong>
+                    <p>Comprime las imágenes a WebP y reduce su tamaño para vistas previas instantáneas, aplicando la calidad máxima solo al descargar.</p>
+                </div>
+                <div class="feature-card">
+                    <strong>Auditoría de Alucinaciones</strong>
+                    <p>Cuenta con un "Mapa JET" que compara los gradientes matemáticos, demostrando que la aplicación no inventa detalles (uso forense).</p>
+                </div>
+                <div class="feature-card">
+                    <strong>Modo Acumulativo</strong>
+                    <p>Permite encadenar múltiples filtros (ej. iluminar + remarcar texto + quitar ruido) de forma visual.</p>
+                </div>
+            </div>
+        </section>
+
+        <section>
+            <h2>📁 Estructura del Proyecto</h2>
+            <p>El proyecto sigue una estricta <strong>Arquitectura Limpia (Clean Architecture)</strong>, separando la interfaz visual del motor matemático.</p>
+            
+            <pre><code class="tree-code">restaurador-imagenes-ia/
+├── frontend/                   # Interfaz visual de usuario
+│   ├── index.html              # Estructura de la página web
+│   ├── style.css               # Diseño, colores y animaciones
+│   └── app.js                  # Lógica interactiva
+│
+├── backend/                    # Motor principal y servidor
+│   ├── requirements.txt        # Librerías necesarias
+│   ├── app/                    
+│   │   ├── main.py             # Archivo que enciende el servidor
+│   │   ├── schemas.py          # Reglas de viaje de datos
+│   │   └── routers/process.py  # Enrutador REST
+│   │
+│   ├── vision/                 # Núcleo de Matemática
+│   │   ├── imageio.py          # Conversión de imágenes
+│   │   └── filters.py          # Fórmulas de OpenCV
+│   │
+│   ├── experiments/            # Registros del método científico
+│   ├── tests/                  # Pruebas automatizadas (pytest)
+│   ├── tools/                  # Herramientas modulares extra
+│   └── pipeline/               # Tuberías de automatización
+│
+└── README.md                   # Este manual</code></pre>
+
+            <div class="info-box">
+                <strong>🔍 ¿Por qué hay carpetas que no se usan directamente?</strong>
+                <p style="margin-top: 10px;">Carpetas como <code class="inline">experiments/</code>, <code class="inline">tests/</code>, y <code class="inline">tools/</code> no son llamadas por la UI, pero se mantienen por el <strong>rigor académico de la tesis</strong>. Demuestran la validación de las fórmulas, pruebas de calidad de código y dejan la arquitectura lista para futuras expansiones.</p>
+            </div>
+        </section>
+
+        <section>
+            <h2>💻 Guía de Instalación (Para principiantes)</h2>
+            <p>Sigue estos pasos para usar el programa en Windows, incluso si no sabes programar.</p>
+
+            <h3>Requisitos Previos</h3>
+            <ol>
+                <li>Descarga e instala <strong>Python</strong> (marca la casilla "Add Python to PATH" durante la instalación).</li>
+                <li>Descarga un editor de texto como <strong>Visual Studio Code (VS Code)</strong>.</li>
+            </ol>
+
+            <h3>Paso 1: Preparar el Motor (Backend)</h3>
+            <p>Abre la terminal en VS Code y ejecuta estos comandos uno por uno:</p>
+            <pre><code class="bash-code"># 1. Entrar a la carpeta del motor
+cd backend
+
+# 2. Crear un entorno virtual seguro
+python -m venv venv
+
+# 3. Activar el entorno (En Windows)
+.\venv\Scripts\activate
+
+# 4. Instalar los motores matemáticos
+pip install -r requirements.txt</code></pre>
+
+            <h3>Paso 2: Encender el Servidor</h3>
+            <p>Cada vez que quieras usar la aplicación, debes encender el motor en tu terminal (con el <code class="inline">(venv)</code> activado):</p>
+            <pre><code class="bash-code">uvicorn app.main:app --reload</code></pre>
+            <p>Verás un mensaje que dice <code class="inline">Uvicorn running on http://127.0.0.1:8000</code>. <strong>¡No cierres esta ventana negra!</strong></p>
+
+            <h3>Paso 3: Abrir la Aplicación Visual</h3>
+            <p>Ve a la carpeta <code class="inline">frontend/</code> en el Explorador de Archivos y haz <strong>doble clic</strong> en el archivo <code class="inline">index.html</code>. Se abrirá en tu navegador listo para usarse.</p>
+        </section>
+
+        <section>
+            <h2>🎨 ¿Cómo usar la aplicación?</h2>
+            <ol>
+                <li><strong>Subir Foto:</strong> Arrastra una imagen o haz clic en "Upload".</li>
+                <li><strong>Seleccionar Categoría:</strong> Haz clic en <strong>📄 Documento</strong> o <strong>👤 Retrato</strong> para desplegar las herramientas correctas.</li>
+                <li><strong>Aplicar Filtros:</strong> Enciende los interruptores. El programa procesará una versión rápida al instante. Usa el deslizador central para comparar.</li>
+                <li><strong>Auditar (Opcional):</strong> Para comprobar científicamente los cambios, haz clic en "Auditar Gradientes".</li>
+                <li><strong>Descargar:</strong> Haz clic en el botón de descarga para guardar tu foto restaurada en alta resolución.</li>
+            </ol>
+        </section>
+
+    </div>
+</body>
+</html>
