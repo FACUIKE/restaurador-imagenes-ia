@@ -182,6 +182,7 @@ document.addEventListener('DOMContentLoaded', () => {
         // Tomamos el último estado restaurado para calcular los gradientes de Sobel
         const imgRestauradaSrc = document.getElementById('img-restaurada').src;
 
+        
         try {
             const response = await fetch("/api/process", {
                 method: "POST",
