@@ -271,5 +271,6 @@ document.addEventListener('DOMContentLoaded', () => {
             statusTxt.innerText = "❌ Error procesando en servidor.";
             console.error(error);
         }
+        
     }
 });
