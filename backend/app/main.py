@@ -1,3 +1,8 @@
+import sys
+import os
+# Esto orienta a Vercel para que encuentre las carpetas 'app' y 'vision'
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.routers import process
