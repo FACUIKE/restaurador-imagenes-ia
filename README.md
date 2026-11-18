@@ -1,3 +1,23 @@
+Materia: Técnicas de Procesamiento Digital de Imágenes
+Año y cuatrimestre de cursada: 3 año segundo cuatrimestre
+Su nombre y apellido: IKEMIYA FACUNDO 
+Docente: BONINI JUAN
+Que los motivo a crear lo que crearon:
+
+
+Que problemáticas encontraron y como las resolvieron:
+1 - Rama incorrecta en Vercel: Vercel intentaba desplegar la rama main por defecto en lugar de la rama donde tenías el vercel.json y los cambios. Solución: Cambie la configuración para que tomara tu rama de trabajo y lograste el primer despliegue exitoso.
+2 - Error de conexión del frontend (127.0.0.1:8000): Al probar la app en la nube, los botones no hacían nada porque el navegador seguía buscando el servidor en tu PC local. Solución: Cambie las rutas en frontend/app.js a /api/process, subi el cambio a GitHub y actualice el despliegue.
+3 - Error 500 en el backend (No module named 'app'): Vercel ejecuta el código desde la carpeta raíz y Python no encontraba las carpetas internas de backend/. Solución: Agregue las líneas de sys.path.append al inicio de backend/app/main.py para indicarle a Vercel la ruta exacta de los módulos.
+4 - Despliegue atrapado en "Preview": La última actualización con el arreglo de main.py quedó en modo vista previa en lugar de reemplazar la versión principal. Solución: La promovi manualmente a Production desde el menú de los tres puntitos en Vercel.
+5 - Se quito el uso de n8n y la IA
+    A - Sin IA generativa (ni GPU): Se optó por Procesamiento Digital de Imágenes (PDI) clásico optimizado en lugar de modelos pesados de IA para que la aplicación no requiera internet ni tarjeta gráfica, logrando que funcione fluida incluso en notebooks de bajos recursos. Además, el enfoque matemático garantiza que el programa no invente ni "alucine" detalles, lo cual es crítico para restaurar documentos.
+    B - Sin n8n ni servicios externos: Se descartaron orquestadores o APIs en la nube para que el sistema sea 100% privado y local, asegurando que las fotos nunca salgan de la computadora del usuario. Como la herramienta es interactiva (el usuario prende y apaga filtros al instante), conectar el frontend directamente a FastAPI evita capas innecesarias y reduce la latencia.
+6 - Por qué están las carpetas que no se usan directamente, aunque la aplicación principal no las llama al procesar una foto,se amantienen por buenas prácticas y para poder escalar el proyecto a futuro.
+    A - experiments/: Guarda los scripts de validación (benchmarks) donde se comprobó qué fórmulas matemáticas eran más rápidas y eficientes.
+    B - tests/: Contiene las pruebas automatizadas (pytest) que sirven para verificar que las fórmulas no fallen al hacer modificaciones en el código.
+    C - tools/ y pipeline/: Funcionan como una base de arquitectura expansible; si más adelante el proyecto crece y pasa a ser automático en lugar de manual, el código nuevo se organizaría ahí usando Programación Orientada a Objetos.
+
 🖼️ VisionRestore AI - Plataforma de Restauración 
 
 VisionRestore AI es una aplicación web interactiva y 100% offline diseñada para la restauración matemática de imágenes digitales (documentos y retratos).
