@@ -2,10 +2,13 @@ Materia: Técnicas de Procesamiento Digital de Imágenes
 Año y cuatrimestre de cursada: 3 año segundo cuatrimestre
 Su nombre y apellido: IKEMIYA FACUNDO 
 Docente: BONINI JUAN
-Que los motivo a crear lo que crearon:
 
+Que los motivo a crear lo que crearon:
+Me motivó la idea de resolver un problema que veo hoy en día: la mayoría de las herramientas para mejorar imágenes dependen de internet, exigen computadoras con tarjetas gráficas o te obligan a subir fotos personales y documentos a servidores externos. Quería demostrar que se puede lograr una restauración de calidad sin sacrificar la privacidad ni necesitar un equipo de última generación. 
+Por eso elegí el procesamiento matemático clásico y optimizado: para que cualquier persona, incluso desde una notebook vieja y sin conexión, pueda rescatar un retrato o un documento borroso con la tranquilidad de que sus archivos nunca salen de su computadora y de que el programa no va a inventar detalles que no estaban en la foto original.
 
 Que problemáticas encontraron y como las resolvieron:
+
 1 - Rama incorrecta en Vercel: Vercel intentaba desplegar la rama main por defecto en lugar de la rama donde tenías el vercel.json y los cambios. Solución: Cambie la configuración para que tomara tu rama de trabajo y lograste el primer despliegue exitoso.
 2 - Error de conexión del frontend (127.0.0.1:8000): Al probar la app en la nube, los botones no hacían nada porque el navegador seguía buscando el servidor en tu PC local. Solución: Cambie las rutas en frontend/app.js a /api/process, subi el cambio a GitHub y actualice el despliegue.
 3 - Error 500 en el backend (No module named 'app'): Vercel ejecuta el código desde la carpeta raíz y Python no encontraba las carpetas internas de backend/. Solución: Agregue las líneas de sys.path.append al inicio de backend/app/main.py para indicarle a Vercel la ruta exacta de los módulos.
@@ -17,6 +20,10 @@ Que problemáticas encontraron y como las resolvieron:
     A - experiments/: Guarda los scripts de validación (benchmarks) donde se comprobó qué fórmulas matemáticas eran más rápidas y eficientes.
     B - tests/: Contiene las pruebas automatizadas (pytest) que sirven para verificar que las fórmulas no fallen al hacer modificaciones en el código.
     C - tools/ y pipeline/: Funcionan como una base de arquitectura expansible; si más adelante el proyecto crece y pasa a ser automático en lugar de manual, el código nuevo se organizaría ahí usando Programación Orientada a Objetos.
+
+
+
+
 
 🖼️ VisionRestore AI - Plataforma de Restauración 
 
