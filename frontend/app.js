@@ -244,7 +244,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     })
                 });
                 finalData = await response.json();
-                tempB64 = "data:image/png;base64," + finalData.restaurada_b64;
+                tempB64 = "data:image/webp;base64," + finalData.restaurada_b64;
                 totalLatencia += (performance.now() - t0) / 1000;
             }
             

@@ -3,18 +3,27 @@ import numpy as np
 
 def procesar_adaptativa(img_np: np.ndarray, categoria: str, sub_modo: str, intensidad: float) -> np.ndarray:
     h, w = img_np.shape[:2]
-    nw, nh = int(w * 2), int(h * 2)
-    escalada = cv2.resize(img_np, (nw, nh), interpolation=cv2.INTER_CUBIC)
+    MAX_SIDE = 1600
     
+    # Determinar si es necesario escalar (evita crecimiento exponencial en modo acumulativo)
+    necesita_escalar = max(w, h) < MAX_SIDE
+    if necesita_escalar:
+        scale = min(2.0, MAX_SIDE / max(w, h))
+        nw, nh = int(w * scale), int(h * scale)
+    else:
+        nw, nh = w, h
+
     if categoria == "texto":
+        escalada = cv2.resize(img_np, (nw, nh), interpolation=cv2.INTER_CUBIC) if necesita_escalar else img_np.copy()
+        gris = cv2.cvtColor(escalada, cv2.COLOR_RGB2GRAY)
+
         if sub_modo == "Iluminación Irregular (Sauvola)":
             c_val = int(intensidad) if intensidad else 10
-            gris = cv2.cvtColor(escalada, cv2.COLOR_RGB2GRAY)
-            return cv2.cvtColor(cv2.adaptiveThreshold(gris, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY, 21, c_val), cv2.COLOR_GRAY2RGB)
+            binaria = cv2.adaptiveThreshold(gris, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY, 21, c_val)
+            return cv2.cvtColor(binaria, cv2.COLOR_GRAY2RGB)
             
         elif sub_modo == "Trazos Desgastados (Top-Hat)":
             alpha_val = intensidad if intensidad else 2.5
-            gris = cv2.cvtColor(escalada, cv2.COLOR_RGB2GRAY)
             kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (21, 21))
             blackhat = cv2.morphologyEx(gris, cv2.MORPH_BLACKHAT, kernel)
             res = cv2.subtract(gris, cv2.convertScaleAbs(blackhat, alpha=alpha_val, beta=0))
@@ -22,9 +31,8 @@ def procesar_adaptativa(img_np: np.ndarray, categoria: str, sub_modo: str, inten
             
         elif sub_modo == "Eliminar Muaré de Pantalla (FFT 2D)":
             radio = int(intensidad) if intensidad else 40
-            gris = cv2.cvtColor(escalada, cv2.COLOR_RGB2GRAY)
             fshift = np.fft.fftshift(np.fft.fft2(gris))
-            crow, ccol = gris.shape[0] // 2 , gris.shape[1] // 2
+            crow, ccol = gris.shape[0] // 2, gris.shape[1] // 2
             mascara = np.ones(gris.shape, np.uint8)
             mascara[crow-3:crow+3, :], mascara[:, ccol-3:ccol+3] = 0, 0
             mascara[crow-radio:crow+radio, ccol-radio:ccol+radio] = 1
@@ -37,9 +45,14 @@ def procesar_adaptativa(img_np: np.ndarray, categoria: str, sub_modo: str, inten
     elif categoria == "rostro":
         ycbcr = cv2.cvtColor(img_np, cv2.COLOR_RGB2YCrCb)
         y, cr, cb = cv2.split(ycbcr)
-        y_up = cv2.resize(y, (nw, nh), interpolation=cv2.INTER_CUBIC)
-        cr_up = cv2.resize(cr, (nw, nh), interpolation=cv2.INTER_CUBIC)
-        cb_up = cv2.resize(cb, (nw, nh), interpolation=cv2.INTER_CUBIC)
+        
+        if necesita_escalar:
+            y_up = cv2.resize(y, (nw, nh), interpolation=cv2.INTER_CUBIC)
+            cr_up = cv2.resize(cr, (nw, nh), interpolation=cv2.INTER_CUBIC)
+            cb_up = cv2.resize(cb, (nw, nh), interpolation=cv2.INTER_CUBIC)
+        else:
+            y_up, cr_up, cb_up = y, cr, cb
+
         escalada = cv2.cvtColor(cv2.merge((y_up, cr_up, cb_up)), cv2.COLOR_YCrCb2RGB)
 
         if sub_modo == "Super-Resolución (Solo YCbCr)":
@@ -48,7 +61,7 @@ def procesar_adaptativa(img_np: np.ndarray, categoria: str, sub_modo: str, inten
             
         elif sub_modo == "Trepidación (Deconvolución / Sharpening)":
             fuerza = intensidad if intensidad else 0.7
-            res = cv2.filter2D(escalada, -1, np.array([[-1,-1,-1], [-1,9,-1], [-1,-1,-1]]))
+            res = cv2.filter2D(escalada, -1, np.array([[-1, -1, -1], [-1, 9, -1], [-1, -1, -1]]))
             return cv2.addWeighted(escalada, 1.0 - fuerza, res, fuerza, 0)
             
         elif sub_modo == "Ruido ISO Alto (No-Local Means)":
@@ -59,7 +72,7 @@ def procesar_adaptativa(img_np: np.ndarray, categoria: str, sub_modo: str, inten
             img_float = np.float32(escalada) + 1.0
             retinex = sum(np.log10(img_float) - np.log10(cv2.GaussianBlur(img_float, (0, 0), s)) for s in [15, 80, 250])
             res = cv2.normalize((retinex / 3.0) * 255.0, None, 0, 255, cv2.NORM_MINMAX)
-            return cv2.cvtColor(cv2.convertScaleAbs(res, alpha=(intensidad or 1.2), beta=10), cv2.COLOR_BGR2RGB)
+            return cv2.convertScaleAbs(res, alpha=(intensidad or 1.2), beta=10)
             
         elif sub_modo == "Suavizado de Piel (Filtro Guiado)":
             return cv2.edgePreservingFilter(escalada, flags=cv2.RECURS_FILTER, sigma_s=(int(intensidad) if intensidad else 60), sigma_r=0.2)

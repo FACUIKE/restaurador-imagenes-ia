@@ -3,7 +3,7 @@ import cv2
 import numpy as np
 
 def img_to_base64(img_np):
-    _, buffer = cv2.imencode('.png', cv2.cvtColor(img_np, cv2.COLOR_RGB2BGR))
+    _, buffer = cv2.imencode('.webp', cv2.cvtColor(img_np, cv2.COLOR_RGB2BGR), [cv2.IMWRITE_WEBP_QUALITY, 92])
     return base64.b64encode(buffer).decode('utf-8')
 
 def base64_to_img(b64_str):
